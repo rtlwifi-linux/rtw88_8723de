@@ -14,19 +14,23 @@
 #include "efuse.h"
 #include "tx.h"
 #include "debug.h"
+#include "bf.h"
 
 unsigned int rtw_fw_lps_deep_mode;
 EXPORT_SYMBOL(rtw_fw_lps_deep_mode);
 static bool rtw_fw_support_lps;
+bool rtw_bf_support = true;
 unsigned int rtw_debug_mask;
 EXPORT_SYMBOL(rtw_debug_mask);
 
 module_param_named(lps_deep_mode, rtw_fw_lps_deep_mode, uint, 0444);
 module_param_named(support_lps, rtw_fw_support_lps, bool, 0644);
+module_param_named(support_bf, rtw_bf_support, bool, 0644);
 module_param_named(debug_mask, rtw_debug_mask, uint, 0644);
 
 MODULE_PARM_DESC(lps_deep_mode, "Deeper PS mode. If 0, deep PS is disabled");
 MODULE_PARM_DESC(support_lps, "Set Y to enable Leisure Power Save support, to turn radio off between beacons");
+MODULE_PARM_DESC(support_bf, "Set Y to enable beamformee support");
 MODULE_PARM_DESC(debug_mask, "Debugging mask");
 
 static struct ieee80211_channel rtw_channeltable_2g[] = {
@@ -129,10 +133,30 @@ static struct ieee80211_supported_band rtw_band_5ghz = {
 };
 
 struct rtw_watch_dog_iter_data {
+	struct rtw_dev *rtwdev;
 	struct rtw_vif *rtwvif;
 	bool active;
 	u8 assoc_cnt;
 };
+
+static void rtw_dynamic_csi_rate(struct rtw_dev *rtwdev, struct rtw_vif *rtwvif)
+{
+	struct rtw_bf_info *bf_info = &rtwdev->bf_info;
+	struct rtw_chip_info *chip = rtwdev->chip;
+	u8 fix_rate_enable = 0;
+	u8 new_csi_rate_idx;
+
+	if (rtwvif->bfee.role != RTW_BFEE_SU &&
+	    rtwvif->bfee.role != RTW_BFEE_MU)
+		return;
+
+	chip->ops->cfg_csi_rate(rtwdev, rtwdev->dm_info.min_rssi,
+				bf_info->cur_csi_rpt_rate,
+				fix_rate_enable, &new_csi_rate_idx);
+
+	if (new_csi_rate_idx != bf_info->cur_csi_rpt_rate)
+		bf_info->cur_csi_rpt_rate = new_csi_rate_idx;
+}
 
 static void rtw_vif_watch_dog_iter(void *data, u8 *mac,
 				   struct ieee80211_vif *vif)
@@ -152,6 +176,8 @@ static void rtw_vif_watch_dog_iter(void *data, u8 *mac,
 		/* only STATION mode can enter lps */
 		iter_data->active = true;
 	}
+
+	rtw_dynamic_csi_rate(iter_data->rtwdev, rtwvif);
 
 	rtwvif->stats.tx_unicast = 0;
 	rtwvif->stats.rx_unicast = 0;
@@ -199,6 +225,7 @@ static void rtw_watch_dog_work(struct work_struct *work)
 
 	rtw_phy_dynamic_mechanism(rtwdev);
 
+	data.rtwdev = rtwdev;
 	/* use atomic version to avoid taking local->iflist_mtx mutex */
 	rtw_iterate_vifs_atomic(rtwdev, rtw_vif_watch_dog_iter, &data);
 
@@ -873,6 +900,12 @@ static void rtw_init_vht_cap(struct rtw_dev *rtwdev,
 		       IEEE80211_VHT_CAP_HTC_VHT |
 		       IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK |
 		       0;
+
+	vht_cap->cap |= IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE |
+			IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE;
+	vht_cap->cap |= (rtwdev->hal.bfee_sts_cap <<
+			IEEE80211_VHT_CAP_BEAMFORMEE_STS_SHIFT);
+
 	mcs_map = IEEE80211_VHT_MCS_SUPPORT_0_9 << 0 |
 		  IEEE80211_VHT_MCS_NOT_SUPPORTED << 4 |
 		  IEEE80211_VHT_MCS_NOT_SUPPORTED << 6 |
@@ -1007,6 +1040,8 @@ static int rtw_chip_parameter_setup(struct rtw_dev *rtwdev)
 
 	/* default use ack */
 	rtwdev->hal.rcr |= BIT_VHT_DACK;
+
+	hal->bfee_sts_cap = 3;
 
 	return ret;
 }
@@ -1337,6 +1372,9 @@ int rtw_register_hw(struct rtw_dev *rtwdev, struct ieee80211_hw *hw)
 		rtw_err(rtwdev, "regulatory_hint fail\n");
 
 	rtw_debugfs_init(rtwdev);
+
+	rtwdev->bf_info.bfer_mu_cnt = 0;
+	rtwdev->bf_info.bfer_su_cnt = 0;
 
 	return 0;
 }

@@ -81,6 +81,8 @@ void rtw_tx(struct rtw_dev *rtwdev,
 	    struct ieee80211_tx_control *control,
 	    struct sk_buff *skb);
 void rtw_txq_init(struct rtw_dev *rtwdev, struct ieee80211_txq *txq);
+void rtw_txq_cleanup(struct rtw_dev *rtwdev, struct ieee80211_txq *txq);
+void rtw_txq_schedule(struct rtw_dev *rtwdev, struct rtw_txq *rtwtxq);
 void rtw_txq_drain(struct rtw_dev *rtwdev, struct rtw_txq *rtwtxq);
 void rtw_tx_pkt_info_update(struct rtw_dev *rtwdev,
 			    struct rtw_tx_pkt_info *pkt_info,

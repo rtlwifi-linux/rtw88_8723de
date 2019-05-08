@@ -126,6 +126,8 @@
 /* IMR 3 */
 #define IMR_H2CDOK		BIT(16)
 
+#define AVG_AMPDU_SIZE		16
+
 /* one element is reserved to know if the ring is closed */
 static inline int avail_desc(u32 wp, u32 rp, u32 len)
 {

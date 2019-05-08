@@ -144,6 +144,7 @@ static int rtw_ops_add_interface(struct ieee80211_hw *hw,
 	rtwvif->stats.rx_cnt = 0;
 	rtwvif->in_lps = false;
 	rtwvif->conf = &rtw_vif_port[port];
+	rtw_txq_init(rtwdev, vif->txq);
 
 	mutex_lock(&rtwdev->mutex);
 
@@ -330,6 +331,7 @@ static int rtw_ops_sta_add(struct ieee80211_hw *hw,
 {
 	struct rtw_dev *rtwdev = hw->priv;
 	struct rtw_sta_info *si = (struct rtw_sta_info *)sta->drv_priv;
+	int i;
 	int ret = 0;
 
 	mutex_lock(&rtwdev->mutex);
@@ -344,6 +346,8 @@ static int rtw_ops_sta_add(struct ieee80211_hw *hw,
 	si->vif = vif;
 	si->init_ra_lv = 1;
 	ewma_rssi_init(&si->avg_rssi);
+	for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
+		rtw_txq_init(rtwdev, sta->txq[i]);
 
 	rtw_update_sta_info(rtwdev, si);
 	rtw_fw_media_status_report(rtwdev, si->mac_id, true);
@@ -459,6 +463,8 @@ static int rtw_ops_ampdu_action(struct ieee80211_hw *hw,
 {
 	struct ieee80211_sta *sta = params->sta;
 	u16 tid = params->tid;
+	struct ieee80211_txq *txq = sta->txq[tid];
+	struct rtw_txq *rtwtxq = (struct rtw_txq *)txq->drv_priv;
 
 	switch (params->action) {
 	case IEEE80211_AMPDU_TX_START:
@@ -467,9 +473,12 @@ static int rtw_ops_ampdu_action(struct ieee80211_hw *hw,
 	case IEEE80211_AMPDU_TX_STOP_CONT:
 	case IEEE80211_AMPDU_TX_STOP_FLUSH:
 	case IEEE80211_AMPDU_TX_STOP_FLUSH_CONT:
+		clear_bit(RTW_TXQ_AMPDU, &rtwtxq->flags);
 		ieee80211_stop_tx_ba_cb_irqsafe(vif, sta->addr, tid);
 		break;
 	case IEEE80211_AMPDU_TX_OPERATIONAL:
+		set_bit(RTW_TXQ_AMPDU, &rtwtxq->flags);
+		break;
 	case IEEE80211_AMPDU_RX_START:
 	case IEEE80211_AMPDU_RX_STOP:
 		break;

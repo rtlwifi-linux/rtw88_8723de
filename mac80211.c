@@ -35,7 +35,7 @@ static void rtw_ops_wake_tx_queue(struct ieee80211_hw *hw,
 	if (!test_bit(RTW_FLAG_RUNNING, rtwdev->flags))
 		return;
 
-	rtw_txq_drain(rtwdev, rtwtxq);
+	rtw_txq_schedule(rtwdev, rtwtxq);
 }
 
 static int rtw_ops_start(struct ieee80211_hw *hw)
@@ -193,6 +193,8 @@ static void rtw_ops_remove_interface(struct ieee80211_hw *hw,
 	mutex_lock(&rtwdev->mutex);
 
 	rtw_leave_lps_deep(rtwdev);
+
+	rtw_txq_cleanup(rtwdev, vif->txq);
 
 	eth_zero_addr(rtwvif->mac_addr);
 	config |= PORT_SET_MAC_ADDR;
@@ -368,11 +370,15 @@ static int rtw_ops_sta_remove(struct ieee80211_hw *hw,
 {
 	struct rtw_dev *rtwdev = hw->priv;
 	struct rtw_sta_info *si = (struct rtw_sta_info *)sta->drv_priv;
+	int i;
 
 	mutex_lock(&rtwdev->mutex);
 
 	rtw_release_macid(rtwdev, si->mac_id);
 	rtw_fw_media_status_report(rtwdev, si->mac_id, false);
+
+	for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
+		rtw_txq_cleanup(rtwdev, sta->txq[i]);
 
 	rtwdev->sta_cnt--;
 

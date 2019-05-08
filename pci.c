@@ -806,6 +806,53 @@ static int rtw_pci_tx(struct rtw_dev *rtwdev,
 	return 0;
 }
 
+static int rtw_pci_pull_txq(struct rtw_dev *rtwdev,
+			    struct rtw_txq *rtwtxq, bool *empty)
+{
+	struct ieee80211_txq *txq = rtwtxq_to_txq(rtwtxq);
+	u16 max_amsdu_len;
+	unsigned long frame_cnt;
+	unsigned long byte_cnt;
+
+	ieee80211_txq_get_depth(txq, &frame_cnt, &byte_cnt);
+
+	if (!frame_cnt)
+		return 0;
+
+	if (!test_bit(RTW_TXQ_AMPDU, &rtwtxq->flags))
+		goto purge;
+
+	if (!txq->sta)
+		goto purge;
+
+	/* no latency for VO/VI, pull all frames out */
+	if (txq->ac == IEEE80211_AC_VO || txq->ac == IEEE80211_AC_VI)
+		goto purge;
+
+	/* time interval longer than 50 us, the traffic is not intensive */
+	if (jiffies_to_usecs(jiffies - rtwtxq->last_push) > 50)
+		goto purge;
+
+	/* Traffic is intensive, leave one for aggregation.
+	 * But if there is only one remained, check if it is aggregated.
+	 * If not, leave it in txq, and it will be served again after 50 us.
+	 */
+	max_amsdu_len = txq->sta->max_rc_amsdu_len;
+	if (frame_cnt > 1)
+		frame_cnt -= 1;
+	else if (max_amsdu_len && byte_cnt < max_amsdu_len)
+		frame_cnt = 0;
+	else if (max_amsdu_len == 0)
+		frame_cnt -= 1;
+
+	*empty = false;
+	rtwtxq->re_scheduled++;
+
+purge:
+
+	return frame_cnt;
+}
+
 static void rtw_pci_tx_isr(struct rtw_dev *rtwdev, struct rtw_pci *rtwpci,
 			   u8 hw_queue)
 {
@@ -1209,6 +1256,7 @@ static void rtw_pci_destroy(struct rtw_dev *rtwdev, struct pci_dev *pdev)
 
 static struct rtw_hci_ops rtw_pci_ops = {
 	.tx = rtw_pci_tx,
+	.pull_txq = rtw_pci_pull_txq,
 	.setup = rtw_pci_setup,
 	.start = rtw_pci_start,
 	.stop = rtw_pci_stop,

@@ -448,6 +448,54 @@ void rtw_txq_drain(struct rtw_dev *rtwdev, struct rtw_txq *rtwtxq)
 		; /* nothing to do now */
 }
 
+void rtw_txq_push(struct rtw_dev *rtwdev,
+		  struct rtw_txq *rtwtxq, int frames)
+{
+	int i;
+
+	for (i = 0; i < frames; i++)
+		if (!rtw_txq_dequeue(rtwdev, rtwtxq))
+			break;
+}
+
+void rtw_txq_schedule(struct rtw_dev *rtwdev, struct rtw_txq *rtwtxq)
+{
+	int frames;
+	bool empty = true;
+
+	spin_lock_bh(&rtwdev->txq_lock);
+
+	frames = rtw_hci_pull_txq(rtwdev, rtwtxq, &empty);
+
+	/* has frames remain in txq, make sure txq get served in 50 usecs */
+	if (!empty && list_empty(&rtwtxq->list)) {
+		list_add_tail(&rtwtxq->list, &rtwdev->txqs);
+		mod_timer(&rtwtxq->timer, jiffies + usecs_to_jiffies(50));
+	}
+
+	rtw_txq_push(rtwdev, rtwtxq, frames);
+
+	spin_unlock_bh(&rtwdev->txq_lock);
+}
+
+static void rtw_txq_timer(struct timer_list *t)
+{
+	struct rtw_txq *rtwtxq = from_timer(rtwtxq, t, timer);
+	struct rtw_dev *rtwdev = rtwtxq->rtwdev;
+
+	rcu_read_lock();
+	spin_lock_bh(&rtwdev->txq_lock);
+	if (list_empty(&rtwtxq->list))
+		goto out;
+
+	list_del_init(&rtwtxq->list);
+	rtw_txq_drain(rtwdev, rtwtxq);
+
+out:
+	spin_unlock_bh(&rtwdev->txq_lock);
+	rcu_read_unlock();
+}
+
 void rtw_txq_init(struct rtw_dev *rtwdev, struct ieee80211_txq *txq)
 {
 	struct rtw_txq *rtwtxq;
@@ -456,5 +504,18 @@ void rtw_txq_init(struct rtw_dev *rtwdev, struct ieee80211_txq *txq)
 		return;
 
 	rtwtxq = (struct rtw_txq *)txq->drv_priv;
+	rtwtxq->rtwdev = rtwdev;
+	timer_setup(&rtwtxq->timer, rtw_txq_timer, 0);
 	INIT_LIST_HEAD(&rtwtxq->list);
+}
+
+void rtw_txq_cleanup(struct rtw_dev *rtwdev, struct ieee80211_txq *txq)
+{
+	struct rtw_txq *rtwtxq;
+
+	if (!txq)
+		return;
+
+	rtwtxq = (struct rtw_txq *)txq->drv_priv;
+	del_timer_sync(&rtwtxq->timer);
 }

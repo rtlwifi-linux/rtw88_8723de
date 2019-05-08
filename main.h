@@ -306,6 +306,11 @@ enum rtw_regulatory_domains {
 	RTW_REGD_MAX
 };
 
+enum rtw_txq_flags {
+	RTW_TXQ_AMPDU,
+	RTW_TXQ_BLOCK_BA,
+};
+
 enum rtw_flags {
 	RTW_FLAG_RUNNING,
 	RTW_FLAG_FW_RUNNING,
@@ -588,6 +593,9 @@ struct rtw_tx_report {
 };
 
 struct rtw_txq {
+	struct list_head list;
+
+	unsigned long flags;
 	unsigned long last_push;
 };
 
@@ -613,6 +621,8 @@ struct rtw_sta_info {
 	bool updated;
 	u8 init_ra_lv;
 	u64 ra_mask;
+
+	DECLARE_BITMAP(tid_ba, IEEE80211_NUM_TIDS);
 };
 
 struct rtw_vif {
@@ -1364,6 +1374,8 @@ struct rtw_dev {
 	/* c2h cmd queue & handler work */
 	struct sk_buff_head c2h_queue;
 	struct work_struct c2h_work;
+
+	struct work_struct ba_work;
 
 	struct rtw_tx_report tx_report;
 

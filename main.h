@@ -601,8 +601,13 @@ struct rtw_ra_report {
 struct rtw_txq {
 	struct list_head list;
 
+	struct rtw_dev *rtwdev;
 	unsigned long flags;
+
 	unsigned long last_push;
+	u8 re_scheduled;
+
+	struct timer_list timer;
 };
 
 #define RTW_BC_MC_MACID 1
@@ -1383,6 +1388,9 @@ struct rtw_dev {
 	struct sk_buff_head c2h_queue;
 	struct work_struct c2h_work;
 
+	/* protect list of txqs */
+	spinlock_t txq_lock;
+	struct list_head txqs;
 	struct work_struct ba_work;
 
 	struct rtw_tx_report tx_report;

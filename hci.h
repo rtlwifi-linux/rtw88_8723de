@@ -10,6 +10,8 @@ struct rtw_hci_ops {
 	int (*tx)(struct rtw_dev *rtwdev,
 		  struct rtw_tx_pkt_info *pkt_info,
 		  struct sk_buff *skb);
+	int (*pull_txq)(struct rtw_dev *rtwdev,
+			struct rtw_txq *rtwtxq, bool *empty);
 	int (*setup)(struct rtw_dev *rtwdev);
 	int (*start)(struct rtw_dev *rtwdev);
 	void (*stop)(struct rtw_dev *rtwdev);
@@ -31,6 +33,12 @@ static inline int rtw_hci_tx(struct rtw_dev *rtwdev,
 			     struct sk_buff *skb)
 {
 	return rtwdev->hci.ops->tx(rtwdev, pkt_info, skb);
+}
+
+static inline int rtw_hci_pull_txq(struct rtw_dev *rtwdev,
+				   struct rtw_txq *rtwtxq, bool *empty)
+{
+	return rtwdev->hci.ops->pull_txq(rtwdev, rtwtxq, empty);
 }
 
 static inline int rtw_hci_setup(struct rtw_dev *rtwdev)

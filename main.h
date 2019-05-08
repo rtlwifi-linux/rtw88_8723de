@@ -587,6 +587,10 @@ struct rtw_tx_report {
 	struct timer_list purge_timer;
 };
 
+struct rtw_txq {
+	unsigned long last_push;
+};
+
 #define RTW_BC_MC_MACID 1
 DECLARE_EWMA(rssi, 10, 16);
 
@@ -1394,6 +1398,13 @@ struct rtw_dev {
 static inline bool rtw_is_assoc(struct rtw_dev *rtwdev)
 {
 	return !!rtwdev->sta_cnt;
+}
+
+static inline struct ieee80211_txq *rtwtxq_to_txq(struct rtw_txq *rtwtxq)
+{
+	void *p = rtwtxq;
+
+	return container_of(p, struct ieee80211_txq, drv_priv);
 }
 
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,

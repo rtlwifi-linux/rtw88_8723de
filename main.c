@@ -12,6 +12,7 @@
 #include "phy.h"
 #include "reg.h"
 #include "efuse.h"
+#include "tx.h"
 #include "debug.h"
 
 unsigned int rtw_fw_lps_deep_mode;
@@ -1246,6 +1247,7 @@ int rtw_register_hw(struct rtw_dev *rtwdev, struct ieee80211_hw *hw)
 
 	hw->extra_tx_headroom = max_tx_headroom;
 	hw->queues = IEEE80211_NUM_ACS;
+	hw->txq_data_size = sizeof(struct rtw_txq);
 	hw->sta_data_size = sizeof(struct rtw_sta_info);
 	hw->vif_data_size = sizeof(struct rtw_vif);
 

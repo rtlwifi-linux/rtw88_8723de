@@ -17,19 +17,25 @@ static void rtw_ops_tx(struct ieee80211_hw *hw,
 		       struct sk_buff *skb)
 {
 	struct rtw_dev *rtwdev = hw->priv;
-	struct rtw_tx_pkt_info pkt_info = {0};
+
+	if (!test_bit(RTW_FLAG_RUNNING, rtwdev->flags)) {
+		ieee80211_free_txskb(hw, skb);
+		return;
+	}
+
+	rtw_tx(rtwdev, control, skb);
+}
+
+static void rtw_ops_wake_tx_queue(struct ieee80211_hw *hw,
+				  struct ieee80211_txq *txq)
+{
+	struct rtw_dev *rtwdev = hw->priv;
+	struct rtw_txq *rtwtxq = (struct rtw_txq *)txq->drv_priv;
 
 	if (!test_bit(RTW_FLAG_RUNNING, rtwdev->flags))
-		goto out;
+		return;
 
-	rtw_tx_pkt_info_update(rtwdev, &pkt_info, control, skb);
-	if (rtw_hci_tx(rtwdev, &pkt_info, skb))
-		goto out;
-
-	return;
-
-out:
-	ieee80211_free_txskb(hw, skb);
+	rtw_txq_drain(rtwdev, rtwtxq);
 }
 
 static int rtw_ops_start(struct ieee80211_hw *hw)
@@ -545,6 +551,7 @@ static int rtw_ops_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
 
 const struct ieee80211_ops rtw_ops = {
 	.tx			= rtw_ops_tx,
+	.wake_tx_queue		= rtw_ops_wake_tx_queue,
 	.start			= rtw_ops_start,
 	.stop			= rtw_ops_stop,
 	.config			= rtw_ops_config,

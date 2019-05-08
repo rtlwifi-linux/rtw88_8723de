@@ -367,3 +367,43 @@ void rtw_rsvd_page_pkt_info_update(struct rtw_dev *rtwdev,
 	pkt_info->qsel = TX_DESC_QSEL_MGMT;
 	pkt_info->ls = true;
 }
+
+void rtw_tx(struct rtw_dev *rtwdev,
+	    struct ieee80211_tx_control *control,
+	    struct sk_buff *skb)
+{
+	struct rtw_tx_pkt_info pkt_info = {0};
+
+	rtw_tx_pkt_info_update(rtwdev, &pkt_info, control, skb);
+	if (rtw_hci_tx(rtwdev, &pkt_info, skb))
+		goto out;
+
+	return;
+
+out:
+	ieee80211_free_txskb(rtwdev->hw, skb);
+}
+
+static bool rtw_txq_dequeue(struct rtw_dev *rtwdev,
+			    struct rtw_txq *rtwtxq)
+{
+	struct ieee80211_txq *txq = rtwtxq_to_txq(rtwtxq);
+	struct ieee80211_tx_control control;
+	struct sk_buff *skb;
+
+	skb = ieee80211_tx_dequeue(rtwdev->hw, txq);
+	if (!skb)
+		return false;
+
+	control.sta = txq->sta;
+	rtw_tx(rtwdev, &control, skb);
+	rtwtxq->last_push = jiffies;
+
+	return true;
+}
+
+void rtw_txq_drain(struct rtw_dev *rtwdev, struct rtw_txq *rtwtxq)
+{
+	while (rtw_txq_dequeue(rtwdev, rtwtxq))
+		; /* nothing to do now */
+}

@@ -2363,6 +2363,7 @@ struct rtw_chip_info rtw8822b_hw_spec = {
 	.dig = rtw8822b_dig,
 	.rf_base_addr = {0x2800, 0x2c00},
 	.rf_sipi_addr = {0xc90, 0xe90},
+	.rf_phy_nr = 2,
 	.mac_tbl = &rtw8822b_mac_tbl,
 	.agc_tbl = &rtw8822b_agc_tbl,
 	.bb_tbl = &rtw8822b_bb_tbl,

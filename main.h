@@ -494,6 +494,13 @@ struct rtw_hw_reg {
 	u32 mask;
 };
 
+struct rtw_rf_sipi_addr {
+	u32 hssi_1;
+	u32 hssi_2;
+	u32 lssi_read;
+	u32 lssi_read_pi;
+};
+
 struct rtw_backup_info {
 	u8 len;
 	u32 reg;
@@ -1052,6 +1059,8 @@ struct rtw_chip_info {
 	struct rtw_hw_reg *dig;
 	u32 rf_base_addr[2];
 	u32 rf_sipi_addr[2];
+	struct rtw_rf_sipi_addr *rf_sipi_read_addr;
+	u8 rf_phy_nr;
 
 	const struct rtw_table *mac_tbl;
 	const struct rtw_table *agc_tbl;

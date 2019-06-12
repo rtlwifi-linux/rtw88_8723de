@@ -15,6 +15,8 @@
 #include "debug.h"
 
 static struct rtw_chip_ops rtw8723d_ops = {
+	.read_rf		= rtw_phy_read_rf_sipi,
+	.write_rf		= rtw_phy_write_rf_reg_sipi,
 	.set_antenna		= NULL,
 	.config_bfee		= NULL,
 	.set_gid_table		= NULL,
@@ -209,6 +211,13 @@ static struct rtw_pwr_seq_cmd *card_disable_flow_8723d[] = {
 	NULL
 };
 
+static struct rtw_rf_sipi_addr rtw8723d_rf_sipi_addr[] = {
+	[0] = { .hssi_1 = 0x820, .lssi_read    = 0x8a0,
+		.hssi_2 = 0x824, .lssi_read_pi = 0x8b8},
+	[1] = { .hssi_1 = 0x828, .lssi_read    = 0x8a4,
+		.hssi_2 = 0x82c, .lssi_read_pi = 0x8bc},
+};
+
 struct rtw_chip_info rtw8723d_hw_spec = {
 	.ops = &rtw8723d_ops,
 	.id = RTW_CHIP_TYPE_8723D,
@@ -231,6 +240,9 @@ struct rtw_chip_info rtw8723d_hw_spec = {
 	.sys_func_en = 0xFD,
 	.pwr_on_seq = card_enable_flow_8723d,
 	.pwr_off_seq = card_disable_flow_8723d,
+	.rf_sipi_addr = {0x840, 0x844},
+	.rf_sipi_read_addr = rtw8723d_rf_sipi_addr,
+	.rf_phy_nr = 2,
 	.wow_supported = false,
 };
 EXPORT_SYMBOL(rtw8723d_hw_spec);

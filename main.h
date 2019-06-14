@@ -777,6 +777,7 @@ struct rtw_chip_ops {
 	void (*set_antenna)(struct rtw_dev *rtwdev, u8 antenna_tx,
 			    u8 antenna_rx);
 	void (*cfg_ldo25)(struct rtw_dev *rtwdev, bool enable);
+	void (*efuse_en)(struct rtw_dev *rtwdev, bool enable);
 	void (*false_alarm_statistics)(struct rtw_dev *rtwdev);
 	void (*phy_calibration)(struct rtw_dev *rtwdev);
 	void (*dpk_track)(struct rtw_dev *rtwdev);
@@ -1663,6 +1664,12 @@ static inline bool rtw_ssid_equal(struct cfg80211_ssid *a,
 		return false;
 
 	return true;
+}
+
+static inline void rtw_efuse_en(struct rtw_dev *rtwdev, bool enable)
+{
+	if (rtwdev->chip->ops->efuse_en)
+		rtwdev->chip->ops->efuse_en(rtwdev, enable);
 }
 
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,

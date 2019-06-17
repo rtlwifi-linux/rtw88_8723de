@@ -14,6 +14,21 @@
 #include "reg.h"
 #include "debug.h"
 
+static int rtw8723d_mac_init_system_cfg(struct rtw_dev *rtwdev)
+{
+	rtw_write8(rtwdev, REG_CR, 0xff);
+	mdelay(2);
+	rtw_write8(rtwdev, REG_HWSEQ_CTRL, 0x7f);
+	mdelay(2);
+
+	rtw_write8_set(rtwdev, REG_SYS_CLKR, BIT_WAKEPAD_EN);
+	rtw_write16_clr(rtwdev, REG_GPIO_MUXCFG, BIT_EN_SIC);
+
+	rtw_write16(rtwdev, REG_CR, 0x2ff);
+
+	return 0;
+}
+
 static void rtw8723de_efuse_parsing(struct rtw_efuse *efuse,
 				    struct rtw8723d_efuse *map)
 {
@@ -83,6 +98,7 @@ static void rtw8723d_efuse_en(struct rtw_dev *rtwdev, bool enable)
 }
 
 static struct rtw_chip_ops rtw8723d_ops = {
+	.mac_init_system_cfg	= rtw8723d_mac_init_system_cfg,
 	.read_efuse		= rtw8723d_read_efuse,
 	.read_rf		= rtw_phy_read_rf_sipi,
 	.write_rf		= rtw_phy_write_rf_reg_sipi,

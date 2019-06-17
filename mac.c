@@ -61,6 +61,14 @@ static int rtw_mac_pre_system_cfg(struct rtw_dev *rtwdev)
 
 	rtw_write8(rtwdev, REG_RSV_CTRL, 0);
 
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N) {
+		if (rtw_read32(rtwdev, REG_SYS_CFG1) & BIT_LDO)
+			rtw_write8(rtwdev, REG_LDO_SWR_CTRL, LDO_SEL);
+		else
+			rtw_write8(rtwdev, REG_LDO_SWR_CTRL, SPS_SEL);
+		return 0;
+	}
+
 	switch (rtw_hci_type(rtwdev)) {
 	case RTW_HCI_TYPE_PCIE:
 		rtw_write32_set(rtwdev, REG_HCI_OPT_CTRL, BIT_BT_DIG_CLK_EN);
@@ -123,10 +131,19 @@ static int rtw_pwr_cmd_polling(struct rtw_dev *rtwdev,
 			if (rtw_hci_type(rtwdev) == RTW_HCI_TYPE_PCIE &&
 			    flag == 0) {
 				value = rtw_read8(rtwdev, REG_SYS_PW_CTRL);
-				value |= BIT(3);
+				if (rtwdev->chip->id == RTW_CHIP_TYPE_8723D) {
+					value &= ~BIT_PFM_WOWL;
+					rtw_write8(rtwdev, REG_SYS_PW_CTRL, value);
+				}
+				value |= BIT_PFM_WOWL;
 				rtw_write8(rtwdev, REG_SYS_PW_CTRL, value);
-				value &= ~BIT(3);
+				value &= ~BIT_PFM_WOWL;
 				rtw_write8(rtwdev, REG_SYS_PW_CTRL, value);
+				if (rtwdev->chip->id == RTW_CHIP_TYPE_8723D) {
+					value |= BIT_PFM_WOWL;
+					rtw_write8(rtwdev, REG_SYS_PW_CTRL, value);
+				}
+
 				cnt = RTW_PWR_POLLING_CNT;
 				flag = 1;
 			} else {
@@ -227,6 +244,9 @@ static int rtw_mac_power_switch(struct rtw_dev *rtwdev, bool pwr_on)
 	u8 rpwm;
 	bool cur_pwr;
 
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto pwr_status;
+
 	rpwm = rtw_read8(rtwdev, rtwdev->hci.rpwm_addr);
 
 	/* Check FW still exist or not */
@@ -235,6 +255,7 @@ static int rtw_mac_power_switch(struct rtw_dev *rtwdev, bool pwr_on)
 		rtw_write8(rtwdev, rtwdev->hci.rpwm_addr, rpwm);
 	}
 
+pwr_status:
 	if (rtw_read8(rtwdev, REG_CR) == 0xea)
 		cur_pwr = false;
 	else if (rtw_hci_type(rtwdev) == RTW_HCI_TYPE_USB &&
@@ -243,7 +264,7 @@ static int rtw_mac_power_switch(struct rtw_dev *rtwdev, bool pwr_on)
 	else
 		cur_pwr = true;
 
-	if (pwr_on && cur_pwr)
+	if (pwr_on == cur_pwr)
 		return -EALREADY;
 
 	pwr_seq = pwr_on ? chip->pwr_on_seq : chip->pwr_off_seq;
@@ -253,7 +274,7 @@ static int rtw_mac_power_switch(struct rtw_dev *rtwdev, bool pwr_on)
 	return 0;
 }
 
-static int rtw_mac_init_system_cfg(struct rtw_dev *rtwdev)
+static int _rtw_mac_init_system_cfg(struct rtw_dev *rtwdev)
 {
 	u8 sys_func_en = rtwdev->chip->sys_func_en;
 	u8 value8;
@@ -276,6 +297,14 @@ static int rtw_mac_init_system_cfg(struct rtw_dev *rtwdev)
 	}
 
 	return 0;
+}
+
+static int rtw_mac_init_system_cfg(struct rtw_dev *rtwdev)
+{
+	if (rtwdev->chip->ops->mac_init_system_cfg)
+		return rtwdev->chip->ops->mac_init_system_cfg(rtwdev);
+
+	return _rtw_mac_init_system_cfg(rtwdev);
 }
 
 int rtw_mac_power_on(struct rtw_dev *rtwdev)

@@ -1018,6 +1018,11 @@ struct rtw_pwr_track_tbl {
 	const u8 *pwrtrk_2g_ccka_p;
 };
 
+enum rtw_wlan_cpu {
+	RTW_WCPU_11AC,
+	RTW_WCPU_11N,
+};
+
 /* hardware configuration for each IC */
 struct rtw_chip_info {
 	struct rtw_chip_ops *ops;
@@ -1025,6 +1030,7 @@ struct rtw_chip_info {
 
 	const char *fw_name;
 	const char *wow_fw_name;
+	enum rtw_wlan_cpu wlan_cpu;
 	u8 tx_pkt_desc_sz;
 	u8 tx_buf_desc_sz;
 	u8 rx_pkt_desc_sz;

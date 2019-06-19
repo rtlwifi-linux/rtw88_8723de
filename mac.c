@@ -569,8 +569,8 @@ download_firmware_to_mem(struct rtw_dev *rtwdev, const u8 *data,
 	return 0;
 }
 
-static void update_firmware_info(struct rtw_dev *rtwdev,
-				 struct rtw_fw_state *fw)
+static void _update_firmware_info(struct rtw_dev *rtwdev,
+				  struct rtw_fw_state *fw)
 {
 	const struct rtw_fw_hdr *fw_hdr =
 				(const struct rtw_fw_hdr *)fw->firmware->data;
@@ -579,6 +579,27 @@ static void update_firmware_info(struct rtw_dev *rtwdev,
 	fw->version = le16_to_cpu(fw_hdr->version);
 	fw->sub_version = fw_hdr->subversion;
 	fw->sub_index = fw_hdr->subindex;
+}
+
+static void _update_firmware_info_legacy(struct rtw_dev *rtwdev,
+					 struct rtw_fw_state *fw)
+{
+	struct rtw_fw_hdr_legacy *legacy =
+				(struct rtw_fw_hdr_legacy *)fw->firmware->data;
+
+	fw->h2c_version = 0;
+	fw->version = le16_to_cpu(legacy->version);
+	fw->sub_version = legacy->subversion1;
+	fw->sub_index = legacy->subversion2;
+}
+
+static void update_firmware_info(struct rtw_dev *rtwdev,
+				 struct rtw_fw_state *fw)
+{
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		_update_firmware_info_legacy(rtwdev, fw);
+	else
+		_update_firmware_info(rtwdev, fw);
 
 	rtw_dbg(rtwdev, RTW_DBG_FW, "fw h2c version: %x\n", fw->h2c_version);
 	rtw_dbg(rtwdev, RTW_DBG_FW, "fw version:     %x\n", fw->version);
@@ -666,7 +687,7 @@ static void download_firmware_end_flow(struct rtw_dev *rtwdev)
 	rtw_write16(rtwdev, REG_MCUFW_CTRL, fw_ctrl);
 }
 
-int rtw_download_firmware(struct rtw_dev *rtwdev, struct rtw_fw_state *fw)
+int _rtw_download_firmware(struct rtw_dev *rtwdev, struct rtw_fw_state *fw)
 {
 	struct rtw_backup_info bckp[DLFW_RESTORE_REG_NUM];
 	const u8 *data = fw->firmware->data;
@@ -722,6 +743,153 @@ dlfw_fail:
 	rtw_write8_clr(rtwdev, REG_MCUFW_CTRL, BIT_MCUFWDL_EN);
 	rtw_write8_set(rtwdev, REG_SYS_FUNC_EN + 1, BIT_FEN_CPUEN);
 
+	return ret;
+}
+
+static void en_download_firmware_legacy(struct rtw_dev *rtwdev, bool en)
+{
+	int try;
+
+	if (en) {
+		wlan_cpu_enable(rtwdev, false);
+		wlan_cpu_enable(rtwdev, true);
+
+		rtw_write8_set(rtwdev, REG_MCUFW_CTRL, BIT_MCUFWDL_EN);
+
+		for (try = 0; try < 10; try++) {
+			if (rtw_read8(rtwdev, REG_MCUFW_CTRL) & BIT_MCUFWDL_EN)
+				goto fwdl_ready;
+			rtw_write8_set(rtwdev, REG_MCUFW_CTRL, BIT_MCUFWDL_EN);
+			msleep(20);
+		}
+		rtw_warn(rtwdev, "%s: fail to check fw download ready\n", __func__);
+fwdl_ready:
+		rtw_write32_clr(rtwdev, REG_MCUFW_CTRL, BIT_ROM_DLEN);
+	} else {
+		rtw_write8_clr(rtwdev, REG_MCUFW_CTRL, BIT_MCUFWDL_EN);
+	}
+}
+
+static void
+write_firmware_page(struct rtw_dev *rtwdev, u32 page, const u8 *data, u32 size)
+{
+	u32 val32;
+	u32 block_nr;
+	u32 remain_size;
+	u32 write_addr = FW_START_ADDR_LEGACY;
+	const __le32 *ptr = (const __le32 *)data;
+	u32 block;
+	u8 remain_data[4] = {0};
+
+	block_nr = size / DLFW_BLK_SIZE_LEGACY;
+	remain_size = size & (DLFW_BLK_SIZE_LEGACY - 1);
+
+	val32 = rtw_read32(rtwdev, REG_MCUFW_CTRL);
+	val32 &= ~BIT_ROM_PGE;
+	val32 |= (page << BIT_SHIFT_ROM_PGE) & BIT_ROM_PGE;
+	rtw_write32(rtwdev, REG_MCUFW_CTRL, val32);
+
+	for (block = 0; block < block_nr; block++) {
+		rtw_write32(rtwdev, write_addr, le32_to_cpu(*ptr));
+
+		write_addr += DLFW_BLK_SIZE_LEGACY;
+		ptr++;
+	}
+
+	data = (const u8 *)ptr;
+	switch (remain_size) {
+	case 3:
+		remain_data[2] = *(data + 2);
+	case 2:
+		remain_data[1] = *(data + 1);
+	case 1:
+		remain_data[0] = *(data + 0);
+		rtw_write32(rtwdev, write_addr, le32_to_cpu(*(__le32 *)remain_data));
+		break;
+	default:
+		break;
+	}
+}
+
+static
+int download_firmware_legacy(struct rtw_dev *rtwdev, const u8 *data, u32 size)
+{
+	u32 page;
+	u32 total_page;
+	u32 last_page_size;
+
+	data += sizeof(struct rtw_fw_hdr_legacy);
+	size -= sizeof(struct rtw_fw_hdr_legacy);
+
+	total_page = size / DLFW_PAGE_SIZE_LEGACY;
+	last_page_size = size & (DLFW_PAGE_SIZE_LEGACY - 1);
+
+	rtw_write8_set(rtwdev, REG_MCUFW_CTRL, BIT_FWDL_CHK_RPT);
+
+	for (page = 0; page < total_page; page++) {
+		write_firmware_page(rtwdev, page, data, DLFW_PAGE_SIZE_LEGACY);
+		data += DLFW_PAGE_SIZE_LEGACY;
+	}
+	if (last_page_size)
+		write_firmware_page(rtwdev, page, data, last_page_size);
+
+	if (!check_hw_ready(rtwdev, REG_MCUFW_CTRL, BIT_FWDL_CHK_RPT, 1)) {
+		rtw_err(rtwdev, "Download fimrware check report failed\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int download_firmware_validate_legacy(struct rtw_dev *rtwdev)
+{
+	u32 val32;
+	int try;
+
+	val32 = rtw_read32(rtwdev, REG_MCUFW_CTRL);
+	val32 |= BIT_MCUFWDL_RDY;
+	val32 &= ~BIT_WINTINI_RDY;
+	rtw_write32(rtwdev, REG_MCUFW_CTRL, val32);
+
+	wlan_cpu_enable(rtwdev, false);
+	wlan_cpu_enable(rtwdev, true);
+
+	for (try = 0; try < 10; try++) {
+		val32 = rtw_read32(rtwdev, REG_MCUFW_CTRL);
+		if ((val32 & FW_READY_LEGACY) == FW_READY_LEGACY)
+			return 0;
+		msleep(20);
+	}
+
+	rtw_err(rtwdev, "download fimrware validate failed\n");
+	return -EINVAL;
+}
+
+int _rtw_download_firmware_legacy(struct rtw_dev *rtwdev, struct rtw_fw_state *fw)
+{
+	int ret = 0;
+
+	en_download_firmware_legacy(rtwdev, true);
+	ret = download_firmware_legacy(rtwdev, fw->firmware->data, fw->firmware->size);
+	en_download_firmware_legacy(rtwdev, false);
+	if (ret)
+		goto out;
+
+	ret = download_firmware_validate_legacy(rtwdev);
+	if (ret)
+		goto out;
+
+	update_firmware_info(rtwdev, fw);
+
+	/* reset desc and index */
+	rtw_hci_setup(rtwdev);
+
+	rtwdev->h2c.last_box_num = 0;
+	rtwdev->h2c.seq = 0;
+
+	set_bit(RTW_FLAG_FW_RUNNING, rtwdev->flags);
+
+out:
 	return ret;
 }
 

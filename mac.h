@@ -29,7 +29,16 @@ void rtw_set_channel_mac(struct rtw_dev *rtwdev, u8 channel, u8 bw,
 			 u8 primary_ch_idx);
 int rtw_mac_power_on(struct rtw_dev *rtwdev);
 void rtw_mac_power_off(struct rtw_dev *rtwdev);
-int rtw_download_firmware(struct rtw_dev *rtwdev, struct rtw_fw_state *fw);
+int _rtw_download_firmware(struct rtw_dev *rtwdev, struct rtw_fw_state *fw);
+int _rtw_download_firmware_legacy(struct rtw_dev *rtwdev, struct rtw_fw_state *fw);
+static inline
+int rtw_download_firmware(struct rtw_dev *rtwdev, struct rtw_fw_state *fw)
+{
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		return _rtw_download_firmware_legacy(rtwdev, fw);
+
+	return _rtw_download_firmware(rtwdev, fw);
+}
 int rtw_mac_init(struct rtw_dev *rtwdev);
 void rtw_mac_flush_queues(struct rtw_dev *rtwdev, u32 queues, bool drop);
 

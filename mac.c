@@ -1063,6 +1063,10 @@ static int set_trx_fifo_info(struct rtw_dev *rtwdev)
 	/* config rsvd page num */
 	fifo->rsvd_drv_pg_num = 8;
 	fifo->txff_pg_num = chip->txff_size >> 7;
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N) {
+		fifo->rsvd_pg_num = fifo->rsvd_drv_pg_num;
+		goto next;
+	}
 	fifo->rsvd_pg_num = fifo->rsvd_drv_pg_num +
 			   RSVD_PG_H2C_EXTRAINFO_NUM +
 			   RSVD_PG_H2C_STATICINFO_NUM +
@@ -1071,6 +1075,7 @@ static int set_trx_fifo_info(struct rtw_dev *rtwdev)
 			   RSVD_PG_FW_TXBUF_NUM +
 			   csi_buf_pg_num;
 
+next:
 	if (fifo->rsvd_pg_num > fifo->txff_pg_num)
 		return -ENOMEM;
 
@@ -1078,6 +1083,8 @@ static int set_trx_fifo_info(struct rtw_dev *rtwdev)
 	fifo->rsvd_boundary = fifo->txff_pg_num - fifo->rsvd_pg_num;
 
 	cur_pg_addr = fifo->txff_pg_num;
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto next2;
 	cur_pg_addr -= csi_buf_pg_num;
 	fifo->rsvd_csibuf_addr = cur_pg_addr;
 	cur_pg_addr -= RSVD_PG_FW_TXBUF_NUM;
@@ -1090,6 +1097,7 @@ static int set_trx_fifo_info(struct rtw_dev *rtwdev)
 	fifo->rsvd_h2c_sta_info_addr = cur_pg_addr;
 	cur_pg_addr -= RSVD_PG_H2C_EXTRAINFO_NUM;
 	fifo->rsvd_h2c_info_addr = cur_pg_addr;
+next2:
 	cur_pg_addr -= fifo->rsvd_drv_pg_num;
 	fifo->rsvd_drv_addr = cur_pg_addr;
 
@@ -1100,6 +1108,13 @@ static int set_trx_fifo_info(struct rtw_dev *rtwdev)
 
 	return 0;
 }
+
+static
+int _priority_queue_cfg(struct rtw_dev *rtwdev, struct rtw_page_table *pg_tbl,
+			u16 pubq_num);
+static
+int _priority_queue_cfg_legacy(struct rtw_dev *rtwdev,
+			       struct rtw_page_table *pg_tbl, u16 pubq_num);
 
 static int priority_queue_cfg(struct rtw_dev *rtwdev)
 {
@@ -1133,6 +1148,19 @@ static int priority_queue_cfg(struct rtw_dev *rtwdev)
 
 	pubq_num = fifo->acq_pg_num - pg_tbl->hq_num - pg_tbl->lq_num -
 		   pg_tbl->nq_num - pg_tbl->exq_num - pg_tbl->gapq_num;
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		return _priority_queue_cfg_legacy(rtwdev, pg_tbl, pubq_num);
+	else
+		return _priority_queue_cfg(rtwdev, pg_tbl, pubq_num);
+}
+
+static
+int _priority_queue_cfg(struct rtw_dev *rtwdev, struct rtw_page_table *pg_tbl,
+			u16 pubq_num)
+{
+	struct rtw_fifo_conf *fifo = &rtwdev->fifo;
+	struct rtw_chip_info *chip = rtwdev->chip;
+
 	rtw_write16(rtwdev, REG_FIFOPAGE_INFO_1, pg_tbl->hq_num);
 	rtw_write16(rtwdev, REG_FIFOPAGE_INFO_2, pg_tbl->lq_num);
 	rtw_write16(rtwdev, REG_FIFOPAGE_INFO_3, pg_tbl->nq_num);
@@ -1153,6 +1181,36 @@ static int priority_queue_cfg(struct rtw_dev *rtwdev)
 		return -EBUSY;
 
 	rtw_write8(rtwdev, REG_CR + 3, 0);
+
+	return 0;
+}
+
+static
+int _priority_queue_cfg_legacy(struct rtw_dev *rtwdev,
+			       struct rtw_page_table *pg_tbl, u16 pubq_num)
+{
+	struct rtw_fifo_conf *fifo = &rtwdev->fifo;
+	struct rtw_chip_info *chip = rtwdev->chip;
+	u32 val32;
+
+	val32 = BIT_RQPN_NE(pg_tbl->nq_num, pg_tbl->exq_num);
+	rtw_write32(rtwdev, REG_RQPN_NPQ, val32);
+	val32 = BIT_RQPN_HLP(pg_tbl->hq_num, pg_tbl->lq_num, pubq_num);
+	rtw_write32(rtwdev, REG_RQPN, val32);
+
+	rtw_write8(rtwdev, REG_TRXFF_BNDY, fifo->rsvd_boundary);
+	rtw_write16(rtwdev, REG_TRXFF_BNDY + 2, chip->rxff_size - REPORT_BUF - 1);
+	rtw_write8(rtwdev, REG_DWBCN0_CTRL + 1, fifo->rsvd_boundary);
+	rtw_write8(rtwdev, REG_BCNQ_BDNY, fifo->rsvd_boundary);
+	rtw_write8(rtwdev, REG_MGQ_BDNY, fifo->rsvd_boundary);
+	rtw_write8(rtwdev, REG_WMAC_LBK_BF_HD, fifo->rsvd_boundary);
+
+	val32 = rtw_read32(rtwdev, REG_AUTO_LLT);
+	val32 |= BIT_AUTO_INIT_LLT;
+	rtw_write32(rtwdev, REG_AUTO_LLT, val32);
+
+	if (!check_hw_ready(rtwdev, REG_AUTO_LLT, BIT_AUTO_INIT_LLT, 0))
+		return -EBUSY;
 
 	return 0;
 }
@@ -1234,11 +1292,14 @@ static int rtw_drv_info_cfg(struct rtw_dev *rtwdev)
 	u8 value8;
 
 	rtw_write8(rtwdev, REG_RX_DRVINFO_SZ, PHY_STATUS_SIZE);
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto skip_rxffovfl;
 	value8 = rtw_read8(rtwdev, REG_TRXFF_BNDY + 1);
 	value8 &= 0xF0;
 	/* For rxdesc len = 0 issue */
 	value8 |= 0xF;
 	rtw_write8(rtwdev, REG_TRXFF_BNDY + 1, value8);
+skip_rxffovfl:
 	rtw_write32_set(rtwdev, REG_RCR, BIT_APP_PHYSTS);
 	rtw_write32_clr(rtwdev, REG_WMAC_OPTION_FUNCTION + 4, BIT(8) | BIT(9));
 

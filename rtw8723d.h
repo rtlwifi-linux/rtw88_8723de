@@ -83,6 +83,8 @@ struct rtw8723d_efuse {
 #define REG_OFDM0_XBAGC1	0x0c58
 #define REG_OFDM_FA_TYPE1_11N	0x0cf0
 #define REG_OFDM_FA_RSTD_11N	0x0d00
+#define REG_CTX			0x0d03
+#define BIT_MASK_CTX_TYPE	GENMASK(6, 4)
 #define REG_OFDM1_CFOTRK	0x0d2c
 #define REG_OFDM1_CSI1		0x0d40
 #define REG_OFDM1_CSI2		0x0d44

@@ -1286,6 +1286,14 @@ static int rtw8822c_mac_init(struct rtw_dev *rtwdev)
 	/* Interrupt migration configuration */
 	rtw_write32(rtwdev, REG_INT_MIG, WLAN_MAC_INT_MIG_CFG);
 
+	/* Special mac configuration for newer type of 8822c chipset to
+	 * prevent the chip from crashing when resume from wowlan mode
+	 */
+	if (rtw_hci_type(rtwdev) == RTW_HCI_TYPE_PCIE &&
+	    rtwdev->hal.cut_version >= RTW_CHIP_VER_CUT_D)
+		rtw_write32_mask(rtwdev, REG_HCI_MIX_CFG,
+				 BIT_PCIE_EMAC_PDN_AUX_TO_FAST_CLK, 1);
+
 	return 0;
 }
 
@@ -3994,6 +4002,7 @@ struct rtw_chip_info rtw8822c_hw_spec = {
 	.ops = &rtw8822c_ops,
 	.id = RTW_CHIP_TYPE_8822C,
 	.fw_name = "rtw88/rtw8822c_fw.bin",
+	.wow_fw_name = "rtw88/rtw8822c_wow_fw.bin",
 	.tx_pkt_desc_sz = 48,
 	.tx_buf_desc_sz = 16,
 	.rx_pkt_desc_sz = 24,
@@ -4035,6 +4044,7 @@ struct rtw_chip_info rtw8822c_hw_spec = {
 	.iqk_threshold = 8,
 	.bfer_su_max_num = 2,
 	.bfer_mu_max_num = 1,
+	.wow_supported = true,
 
 	.coex_para_ver = 0x19062706,
 	.bt_desired_ver = 0x6,

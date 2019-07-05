@@ -10,6 +10,7 @@
 #include "sec.h"
 #include "debug.h"
 #include "util.h"
+#include "wow.h"
 
 static void rtw_fw_c2h_cmd_handle_ext(struct rtw_dev *rtwdev,
 				      struct sk_buff *skb)
@@ -482,6 +483,91 @@ void rtw_fw_set_pwr_mode(struct rtw_dev *rtwdev)
 	rtw_fw_send_h2c_command(rtwdev, h2c_pkt);
 }
 
+void rtw_fw_set_keep_alive_cmd(struct rtw_dev *rtwdev, bool enable)
+{
+	u8 h2c_pkt[H2C_PKT_SIZE] = {0};
+	struct rtw_fw_wow_keep_alive_para mode = {
+		.adopt = true,
+		.pkt_type = NULL_PKT,
+		.sec = 5,
+	};
+
+	SET_H2C_CMD_ID_CLASS(h2c_pkt, H2C_CMD_KEEP_ALIVE);
+	SET_KEEP_ALIVE_ENABLE(h2c_pkt, enable);
+
+	if (enable) {
+		SET_KEEP_ALIVE_ADOPT(h2c_pkt, mode.adopt);
+		SET_KEEP_ALIVE_PKT_TYPE(h2c_pkt, mode.pkt_type);
+		SET_KEEP_ALIVE_CHECK_PERIOD(h2c_pkt, mode.sec);
+	}
+
+	rtw_fw_send_h2c_command(rtwdev, h2c_pkt);
+}
+
+void rtw_fw_set_disconnect_decision_cmd(struct rtw_dev *rtwdev, bool enable)
+{
+	struct rtw_wow_param *wowlan = &rtwdev->wow;
+	u8 h2c_pkt[H2C_PKT_SIZE] = {0};
+
+	SET_H2C_CMD_ID_CLASS(h2c_pkt, H2C_CMD_DISCONNECT_DECISION);
+
+	if (enable && (wowlan->disconnect || wowlan->any)) {
+		SET_DISCONNECT_DECISION_ENABLE(h2c_pkt, enable);
+		SET_DISCONNECT_DECISION_ADOPT(h2c_pkt, enable);
+		SET_DISCONNECT_DECISION_CHECK_PERIOD(h2c_pkt, 30);
+		SET_DISCONNECT_DECISION_TRY_PKT_NUM(h2c_pkt, 5);
+	}
+
+	rtw_fw_send_h2c_command(rtwdev, h2c_pkt);
+}
+
+void rtw_fw_set_wowlan_ctrl_cmd(struct rtw_dev *rtwdev, bool enable)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	u8 h2c_pkt[H2C_PKT_SIZE] = {0};
+
+	SET_H2C_CMD_ID_CLASS(h2c_pkt, H2C_CMD_WOWLAN);
+
+	SET_WOWLAN_FUNC_ENABLE(h2c_pkt, enable);
+	if (rtw_wow->suspend_mode == RTW_SUSPEND_LINKED) {
+		if (rtw_wow->magic_pkt || rtw_wow->any)
+			SET_WOWLAN_MAGIC_PKT_ENABLE(h2c_pkt, enable);
+
+		if (rtw_wow->disconnect || rtw_wow->any)
+			SET_WOWLAN_DEAUTH_WAKEUP_ENABLE(h2c_pkt, enable);
+
+		if (rtw_wow->gtk_rekey_failure ||  rtw_wow->any)
+			SET_WOWLAN_REKEY_WAKEUP_ENABLE(h2c_pkt, enable);
+	}
+
+	rtw_fw_send_h2c_command(rtwdev, h2c_pkt);
+}
+
+void rtw_fw_set_aoac_global_info_cmd(struct rtw_dev *rtwdev,
+				     u8 pairwise_key_enc,
+				     u8 group_key_enc)
+{
+	u8 h2c_pkt[H2C_PKT_SIZE] = {0};
+
+	SET_H2C_CMD_ID_CLASS(h2c_pkt, H2C_CMD_AOAC_GLOBAL_INFO);
+
+	SET_AOAC_GLOBAL_INFO_PAIRWISE_ENC_ALG(h2c_pkt, pairwise_key_enc);
+	SET_AOAC_GLOBAL_INFO_GROUP_ENC_ALG(h2c_pkt, group_key_enc);
+
+	rtw_fw_send_h2c_command(rtwdev, h2c_pkt);
+}
+
+void rtw_fw_set_remote_wake_ctrl_cmd(struct rtw_dev *rtwdev, bool enable)
+{
+	u8 h2c_pkt[H2C_PKT_SIZE] = {0};
+
+	SET_H2C_CMD_ID_CLASS(h2c_pkt, H2C_CMD_REMOTE_WAKE_CTRL);
+
+	SET_REMOTE_WAKECTRL_ENABLE(h2c_pkt, enable);
+
+	rtw_fw_send_h2c_command(rtwdev, h2c_pkt);
+}
+
 static u8 rtw_get_rsvd_page_location(struct rtw_dev *rtwdev,
 				     enum rtw_rsvd_packet_type type)
 {
@@ -938,4 +1024,15 @@ out:
 	rtw_write16(rtwdev, REG_PKTBUF_DBG_CTRL, ctl);
 	rtw_write8(rtwdev, REG_RCR + 2, rcr);
 	return 0;
+}
+
+void rtw_fw_config_rsvd_page(struct rtw_dev *rtwdev)
+{
+	rtw_reset_rsvd_page(rtwdev);
+
+	rtw_add_rsvd_page(rtwdev, RSVD_PS_POLL, true);
+	rtw_add_rsvd_page(rtwdev, RSVD_QOS_NULL, true);
+	rtw_add_rsvd_page(rtwdev, RSVD_NULL, true);
+	rtw_add_rsvd_page(rtwdev, RSVD_LPS_PG_DPK, true);
+	rtw_add_rsvd_page(rtwdev, RSVD_LPS_PG_INFO, true);
 }

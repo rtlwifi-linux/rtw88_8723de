@@ -100,6 +100,17 @@ struct rtw_rsvd_page {
 	bool add_txdesc;
 };
 
+enum rtw_keep_alive_pkt_type {
+	NULL_PKT = 0,
+	ARP_RSP = 1,
+};
+
+struct rtw_fw_wow_keep_alive_para {
+	bool adopt;
+	u8 pkt_type;
+	u8 sec;
+};
+
 struct rtw_fw_hdr {
 	__le16 signature;
 	u8 category;
@@ -197,6 +208,12 @@ static inline void rtw_h2c_pkt_set_header(u8 *h2c_pkt, u8 sub_id)
 #define H2C_CMD_WL_CH_INFO		0x66
 #define H2C_CMD_QUERY_BT_MP_INFO	0x67
 #define H2C_CMD_BT_WIFI_CONTROL		0x69
+
+#define H2C_CMD_KEEP_ALIVE		0x03
+#define H2C_CMD_DISCONNECT_DECISION	0x04
+#define H2C_CMD_WOWLAN			0x80
+#define H2C_CMD_REMOTE_WAKE_CTRL	0x81
+#define H2C_CMD_AOAC_GLOBAL_INFO	0x82
 
 #define SET_H2C_CMD_ID_CLASS(h2c_pkt, value)				       \
 	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, GENMASK(7, 0))
@@ -301,6 +318,47 @@ static inline void rtw_h2c_pkt_set_header(u8 *h2c_pkt, u8 sub_id)
 #define SET_BT_WIFI_CONTROL_DATA5(h2c_pkt, value)                              \
 	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x01, value, GENMASK(23, 16))
 
+#define SET_KEEP_ALIVE_ENABLE(h2c_pkt, value)				       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(8))
+#define SET_KEEP_ALIVE_ADOPT(h2c_pkt, value)				       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(9))
+#define SET_KEEP_ALIVE_PKT_TYPE(h2c_pkt, value)				       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(10))
+#define SET_KEEP_ALIVE_CHECK_PERIOD(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, GENMASK(23, 16))
+
+#define SET_DISCONNECT_DECISION_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(8))
+#define SET_DISCONNECT_DECISION_ADOPT(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(9))
+#define SET_DISCONNECT_DECISION_CHECK_PERIOD(h2c_pkt, value)		       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, GENMASK(23, 16))
+#define SET_DISCONNECT_DECISION_TRY_PKT_NUM(h2c_pkt, value)		       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, GENMASK(31, 24))
+
+#define SET_WOWLAN_FUNC_ENABLE(h2c_pkt, value)				       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(8))
+#define SET_WOWLAN_PATTERN_MATCH_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(9))
+#define SET_WOWLAN_MAGIC_PKT_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(10))
+#define SET_WOWLAN_UNICAST_PKT_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(11))
+#define SET_WOWLAN_REKEY_WAKEUP_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(14))
+#define SET_WOWLAN_DEAUTH_WAKEUP_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(15))
+
+#define SET_REMOTE_WAKECTRL_ENABLE(h2c_pkt, value)			       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(8))
+#define SET_REMOTE_WAKE_CTRL_NLO_OFFLOAD_EN(h2c_pkt, value)		       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, BIT(12))
+
+#define SET_AOAC_GLOBAL_INFO_PAIRWISE_ENC_ALG(h2c_pkt, value)		       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, GENMASK(15, 8))
+#define SET_AOAC_GLOBAL_INFO_GROUP_ENC_ALG(h2c_pkt, value)		       \
+	le32p_replace_bits((__le32 *)(h2c_pkt) + 0x00, value, GENMASK(23, 16))
+
 static inline struct rtw_c2h_cmd *get_c2h_from_skb(struct sk_buff *skb)
 {
 	u32 pkt_offset;
@@ -337,7 +395,16 @@ int rtw_fw_write_data_rsvd_page(struct rtw_dev *rtwdev, u16 pg_addr,
 void rtw_reset_rsvd_page(struct rtw_dev *rtwdev);
 int rtw_fw_download_rsvd_page(struct rtw_dev *rtwdev,
 			      struct ieee80211_vif *vif);
+void rtw_fw_config_rsvd_page(struct rtw_dev *rtwdev);
 void rtw_send_rsvd_page_h2c(struct rtw_dev *rtwdev);
 int rtw_dump_drv_rsvd_page(struct rtw_dev *rtwdev,
 			   u32 offset, u32 size, u32 *buf);
+void rtw_fw_set_remote_wake_ctrl_cmd(struct rtw_dev *rtwdev, bool enable);
+void rtw_fw_set_wowlan_ctrl_cmd(struct rtw_dev *rtwdev, bool enable);
+void rtw_fw_set_keep_alive_cmd(struct rtw_dev *rtwdev, bool enable);
+void rtw_fw_set_disconnect_decision_cmd(struct rtw_dev *rtwdev, bool enable);
+void rtw_fw_set_aoac_global_info_cmd(struct rtw_dev *rtwdev,
+				     u8 pairwise_key_enc,
+				     u8 group_key_enc);
+
 #endif

@@ -1193,6 +1193,22 @@ static void rtw_pci_phy_cfg(struct rtw_dev *rtwdev)
 	}
 }
 
+#ifdef CONFIG_PM
+static int rtw_pci_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	pci_enable_wake(pdev, pci_choose_state(pdev, state), true);
+
+	return 0;
+}
+
+static int rtw_pci_resume(struct pci_dev *pdev)
+{
+	pci_enable_wake(pdev, PCI_D3hot, 0);
+
+	return 0;
+}
+#endif
+
 static int rtw_pci_claim(struct rtw_dev *rtwdev, struct pci_dev *pdev)
 {
 	int ret;
@@ -1418,6 +1434,10 @@ static struct pci_driver rtw_pci_driver = {
 	.id_table = rtw_pci_id_table,
 	.probe = rtw_pci_probe,
 	.remove = rtw_pci_remove,
+#ifdef CONFIG_PM
+	.suspend = rtw_pci_suspend,
+	.resume = rtw_pci_resume,
+#endif
 };
 module_pci_driver(rtw_pci_driver);
 

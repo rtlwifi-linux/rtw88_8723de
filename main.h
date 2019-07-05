@@ -178,6 +178,11 @@ enum rtw_rx_queue_type {
 	RTK_MAX_RX_QUEUE_NUM
 };
 
+enum rtw_fw_type {
+	RTW_NORMAL_FW = 0x0,
+	RTW_WOWLAN_FW = 0x1,
+};
+
 enum rtw_rate_index {
 	RTW_RATEID_BGN_40M_2SS	= 0,
 	RTW_RATEID_BGN_40M_1SS	= 1,
@@ -857,6 +862,15 @@ struct rtw_intf_phy_para {
 	u16 platform;
 };
 
+struct rtw_wow_param {
+	struct ieee80211_vif *wow_vif;
+	u8 suspend_mode;
+	bool any;
+	bool disconnect;
+	bool magic_pkt;
+	bool gtk_rekey_failure;
+};
+
 struct rtw_intf_phy_para_table {
 	struct rtw_intf_phy_para *usb2_para;
 	struct rtw_intf_phy_para *usb3_para;
@@ -927,6 +941,7 @@ struct rtw_chip_info {
 	u8 id;
 
 	const char *fw_name;
+	const char *wow_fw_name;
 	u8 tx_pkt_desc_sz;
 	u8 tx_buf_desc_sz;
 	u8 rx_pkt_desc_sz;
@@ -948,6 +963,8 @@ struct rtw_chip_info {
 	bool ht_supported;
 	bool vht_supported;
 	u8 lps_deep_mode_supported;
+
+	bool wow_supported;
 
 	/* init values */
 	u8 sys_func_en;
@@ -1452,6 +1469,7 @@ struct rtw_dev {
 	struct rtw_hal hal;
 	struct rtw_fifo_conf fifo;
 	struct rtw_fw_state fw;
+	struct rtw_fw_state wow_fw;
 	struct rtw_efuse efuse;
 	struct rtw_sec_desc sec;
 	struct rtw_traffic_stats stats;
@@ -1508,6 +1526,8 @@ struct rtw_dev {
 	DECLARE_BITMAP(flags, NUM_OF_RTW_FLAGS);
 
 	u8 mp_mode;
+
+	struct rtw_wow_param wow;
 
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));

@@ -107,34 +107,6 @@ void rtw_lps_work(struct work_struct *work)
 		rtw_leave_lps_core(rtwdev);
 }
 
-void rtw_enter_lps_irqsafe(struct rtw_dev *rtwdev, struct rtw_vif *rtwvif)
-{
-	struct rtw_lps_conf *conf = &rtwdev->lps_conf;
-
-	if (rtwvif->in_lps)
-		return;
-
-	conf->mode = RTW_MODE_LPS;
-	conf->rtwvif = rtwvif;
-	rtwvif->in_lps = true;
-
-	ieee80211_queue_delayed_work(rtwdev->hw, &rtwdev->lps_work, 0);
-}
-
-void rtw_leave_lps_irqsafe(struct rtw_dev *rtwdev, struct rtw_vif *rtwvif)
-{
-	struct rtw_lps_conf *conf = &rtwdev->lps_conf;
-
-	if (!rtwvif->in_lps)
-		return;
-
-	conf->mode = RTW_MODE_ACTIVE;
-	conf->rtwvif = rtwvif;
-	rtwvif->in_lps = false;
-
-	ieee80211_queue_delayed_work(rtwdev->hw, &rtwdev->lps_work, 0);
-}
-
 bool rtw_in_lps(struct rtw_dev *rtwdev)
 {
 	return test_bit(RTW_FLAG_LEISURE_PS, rtwdev->flags);

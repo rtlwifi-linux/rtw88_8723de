@@ -1052,6 +1052,7 @@ struct rtw_chip_info {
 
 	bool ht_supported;
 	bool vht_supported;
+	bool ldpc_cap;
 	u8 lps_deep_mode_supported;
 
 	bool wow_supported;

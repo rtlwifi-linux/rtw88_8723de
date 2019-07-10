@@ -96,10 +96,6 @@ void rtw_lps_work(struct work_struct *work)
 	struct rtw_dev *rtwdev = container_of(work, struct rtw_dev,
 					      lps_work.work);
 	struct rtw_lps_conf *conf = &rtwdev->lps_conf;
-	struct rtw_vif *rtwvif = conf->rtwvif;
-
-	if (WARN_ON(!rtwvif))
-		return;
 
 	if (conf->mode == RTW_MODE_LPS)
 		rtw_enter_lps_core(rtwdev);
@@ -112,36 +108,27 @@ bool rtw_in_lps(struct rtw_dev *rtwdev)
 	return test_bit(RTW_FLAG_LEISURE_PS, rtwdev->flags);
 }
 
-void rtw_enter_lps(struct rtw_dev *rtwdev, struct rtw_vif *rtwvif)
+void rtw_enter_lps(struct rtw_dev *rtwdev, u8 port_id)
 {
 	struct rtw_lps_conf *conf = &rtwdev->lps_conf;
 
-	if (WARN_ON(!rtwvif))
-		return;
-
-	if (rtwvif->in_lps)
+	if (test_bit(RTW_FLAG_LEISURE_PS, rtwdev->flags))
 		return;
 
 	conf->mode = RTW_MODE_LPS;
-	conf->rtwvif = rtwvif;
-	rtwvif->in_lps = true;
+	conf->port_id = port_id;
 
 	rtw_enter_lps_core(rtwdev);
 }
 
-void rtw_leave_lps(struct rtw_dev *rtwdev, struct rtw_vif *rtwvif)
+void rtw_leave_lps(struct rtw_dev *rtwdev)
 {
 	struct rtw_lps_conf *conf = &rtwdev->lps_conf;
 
-	if (WARN_ON(!rtwvif))
-		return;
-
-	if (!rtwvif->in_lps)
+	if (!test_bit(RTW_FLAG_LEISURE_PS, rtwdev->flags))
 		return;
 
 	conf->mode = RTW_MODE_ACTIVE;
-	conf->rtwvif = rtwvif;
-	rtwvif->in_lps = false;
 
 	rtw_leave_lps_core(rtwdev);
 }

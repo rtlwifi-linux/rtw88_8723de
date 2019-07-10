@@ -103,11 +103,6 @@ void rtw_lps_work(struct work_struct *work)
 		rtw_leave_lps_core(rtwdev);
 }
 
-bool rtw_in_lps(struct rtw_dev *rtwdev)
-{
-	return test_bit(RTW_FLAG_LEISURE_PS, rtwdev->flags);
-}
-
 void rtw_enter_lps(struct rtw_dev *rtwdev, u8 port_id)
 {
 	struct rtw_lps_conf *conf = &rtwdev->lps_conf;

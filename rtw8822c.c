@@ -4063,6 +4063,7 @@ struct rtw_chip_info rtw8822c_hw_spec = {
 	.dig_min = 0x20,
 	.ht_supported = true,
 	.vht_supported = true,
+	.ldpc_cap = true,
 	.lps_deep_mode_supported = BIT(LPS_DEEP_MODE_LCLK) | BIT(LPS_DEEP_MODE_PG),
 	.sys_func_en = 0xD8,
 	.pwr_on_seq = card_enable_flow_8822c,

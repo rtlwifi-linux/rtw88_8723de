@@ -31,7 +31,8 @@ void rtw_tx_stats(struct rtw_dev *rtwdev, struct ieee80211_vif *vif,
 	}
 }
 
-void rtw_tx_fill_tx_desc(struct rtw_tx_pkt_info *pkt_info, struct sk_buff *skb)
+void rtw_tx_fill_tx_desc(struct rtw_dev *rtwdev,
+			 struct rtw_tx_pkt_info *pkt_info, struct sk_buff *skb)
 {
 	__le32 *txdesc = (__le32 *)skb->data;
 
@@ -50,7 +51,8 @@ void rtw_tx_fill_tx_desc(struct rtw_tx_pkt_info *pkt_info, struct sk_buff *skb)
 	SET_TX_DESC_MAX_AGG_NUM(txdesc, pkt_info->ampdu_factor);
 	SET_TX_DESC_AMPDU_DENSITY(txdesc, pkt_info->ampdu_density);
 	SET_TX_DESC_DATA_STBC(txdesc, pkt_info->stbc);
-	SET_TX_DESC_DATA_LDPC(txdesc, pkt_info->ldpc);
+	if (rtwdev->chip->ldpc_cap)
+		SET_TX_DESC_DATA_LDPC(txdesc, pkt_info->ldpc);
 	SET_TX_DESC_AGG_EN(txdesc, pkt_info->ampdu_en);
 	SET_TX_DESC_LS(txdesc, pkt_info->ls);
 	SET_TX_DESC_DATA_SHORT(txdesc, pkt_info->short_gi);

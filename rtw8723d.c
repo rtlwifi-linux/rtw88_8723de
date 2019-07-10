@@ -849,6 +849,7 @@ struct rtw_chip_info rtw8723d_hw_spec = {
 	.dig_min = 0x20,
 	.ht_supported = true,
 	.vht_supported = false,
+	.ldpc_cap = false,
 	.lps_deep_mode_supported = 0,
 	.sys_func_en = 0xFD,
 	.pwr_on_seq = card_enable_flow_8723d,

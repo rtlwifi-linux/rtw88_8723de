@@ -54,7 +54,8 @@ void rtw_tx_fill_tx_desc(struct rtw_dev *rtwdev,
 	if (rtwdev->chip->ldpc_cap)
 		SET_TX_DESC_DATA_LDPC(txdesc, pkt_info->ldpc);
 	SET_TX_DESC_AGG_EN(txdesc, pkt_info->ampdu_en);
-	SET_TX_DESC_LS(txdesc, pkt_info->ls);
+	if (rtwdev->chip->wlan_cpu != RTW_WCPU_11N)
+		SET_TX_DESC_LS(txdesc, pkt_info->ls);
 	SET_TX_DESC_DATA_SHORT(txdesc, pkt_info->short_gi);
 	SET_TX_DESC_SPE_RPT(txdesc, pkt_info->report);
 	SET_TX_DESC_SW_DEFINE(txdesc, pkt_info->sn);

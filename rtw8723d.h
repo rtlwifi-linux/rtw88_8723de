@@ -72,13 +72,30 @@ struct rtw8723d_efuse {
 #define REG_FPGA1_RFMOD		0x0900
 #define REG_BBRX_DFIR		0x0954
 #define REG_CCK0_SYS		0x0a00
+#define REG_CCK_FA_RST_11N	0x0a2c
+#define REG_CCK_FA_LSB_11N	0x0a5c
+#define REG_CCK_FA_MSB_11N	0x0a58
+#define REG_CCK_CCA_CNT_11N	0x0a60
+#define REG_OFDM_FA_HOLDC_11N	0x0c00
+#define REG_OFDM_FA_RSTC_11N	0x0c0c
 #define REG_OFDM0_RXDSP		0x0c40
 #define REG_OFDM0_XAAGC1	0x0c50
 #define REG_OFDM0_XBAGC1	0x0c58
+#define REG_OFDM_FA_TYPE1_11N	0x0cf0
+#define REG_OFDM_FA_RSTD_11N	0x0d00
 #define REG_OFDM1_CFOTRK	0x0d2c
 #define REG_OFDM1_CSI1		0x0d40
 #define REG_OFDM1_CSI2		0x0d44
 #define REG_OFDM1_CSI3		0x0d48
 #define REG_OFDM1_CSI4		0x0d4c
+#define REG_OFDM_FA_TYPE2_11N	0x0da0
+#define REG_OFDM_FA_TYPE3_11N	0x0da4
+#define REG_OFDM_FA_TYPE4_11N	0x0da8
+#define REG_PAGE_F_RST_11N		0x0f14
+#define REG_IGI_C_11N			0x0f84
+#define REG_IGI_D_11N			0x0f88
+#define REG_HT_CRC32_CNT_11N		0x0f90
+#define REG_OFDM_CRC32_CNT_11N		0x0f94
+#define REG_HT_CRC32_CNT_11N_AGG	0x0fb8
 
 #endif

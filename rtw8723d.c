@@ -577,6 +577,69 @@ static void rtw8723d_efuse_en(struct rtw_dev *rtwdev, bool enable)
 	}
 }
 
+static void rtw8723d_false_alarm_statistics(struct rtw_dev *rtwdev)
+{
+	struct rtw_dm_info *dm_info = &rtwdev->dm_info;
+	u32 cck_fa_cnt;
+	u32 ofdm_fa_cnt;
+	u32 crc32_cnt;
+	u32 val32;
+
+	/* hold counter */
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_HOLDC_11N, BIT(31), 1);
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_RSTD_11N, BIT(31), 1);
+	rtw_write32_mask(rtwdev, REG_CCK_FA_RST_11N, BIT(12), 1);
+	rtw_write32_mask(rtwdev, REG_CCK_FA_RST_11N, BIT(14), 1);
+
+	cck_fa_cnt = rtw_read32_mask(rtwdev, REG_CCK_FA_LSB_11N, MASKBYTE0);
+	cck_fa_cnt += rtw_read32_mask(rtwdev, REG_CCK_FA_MSB_11N, MASKBYTE3) << 8;
+
+	val32 = rtw_read32(rtwdev, REG_OFDM_FA_TYPE1_11N);
+	ofdm_fa_cnt = (val32 & 0xffff);
+	ofdm_fa_cnt += ((val32 & 0xffff0000) >> 16);
+	val32 = rtw_read32(rtwdev, REG_OFDM_FA_TYPE2_11N);
+	dm_info->ofdm_cca_cnt = (val32 & 0xffff);
+	ofdm_fa_cnt += ((val32 & 0xffff0000) >> 16);
+	val32 = rtw_read32(rtwdev, REG_OFDM_FA_TYPE3_11N);
+	ofdm_fa_cnt += (val32 & 0xffff);
+	ofdm_fa_cnt += ((val32 & 0xffff0000) >> 16);
+	val32 = rtw_read32(rtwdev, REG_OFDM_FA_TYPE4_11N);
+	ofdm_fa_cnt += (val32 & 0xffff);
+
+	dm_info->cck_fa_cnt = cck_fa_cnt;
+	dm_info->ofdm_fa_cnt = ofdm_fa_cnt;
+	dm_info->total_fa_cnt = cck_fa_cnt + ofdm_fa_cnt;
+
+	dm_info->cck_err_cnt = rtw_read32(rtwdev, REG_IGI_C_11N);
+	dm_info->cck_ok_cnt = rtw_read32(rtwdev, REG_IGI_D_11N);
+	crc32_cnt = rtw_read32(rtwdev, REG_OFDM_CRC32_CNT_11N);
+	dm_info->ofdm_err_cnt = (crc32_cnt & 0xffff0000) >> 16;
+	dm_info->ofdm_ok_cnt = crc32_cnt & 0xffff;
+	crc32_cnt = rtw_read32(rtwdev, REG_HT_CRC32_CNT_11N);
+	dm_info->ht_err_cnt = (crc32_cnt & 0xffff0000) >> 16;
+	dm_info->ht_ok_cnt = crc32_cnt & 0xffff;
+	dm_info->vht_err_cnt = 0;
+	dm_info->vht_ok_cnt = 0;
+
+	val32 = rtw_read32(rtwdev, REG_CCK_CCA_CNT_11N);
+	dm_info->cck_cca_cnt = ((val32 & 0xFF) << 8) | ((val32 & 0xFF00) >> 8);
+	dm_info->total_cca_cnt = dm_info->cck_cca_cnt + dm_info->ofdm_cca_cnt;
+
+	/* reset counter */
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_RSTC_11N, BIT(31), 1);
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_RSTC_11N, BIT(31), 0);
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_RSTD_11N, BIT(27), 1);
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_RSTD_11N, BIT(27), 0);
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_HOLDC_11N, BIT(31), 0);
+	rtw_write32_mask(rtwdev, REG_OFDM_FA_RSTD_11N, BIT(31), 0);
+	rtw_write32_mask(rtwdev, REG_CCK_FA_RST_11N, BIT(13) | BIT(12), 0);
+	rtw_write32_mask(rtwdev, REG_CCK_FA_RST_11N, BIT(13) | BIT(12), 2);
+	rtw_write32_mask(rtwdev, REG_CCK_FA_RST_11N, BIT(15) | BIT(14), 0);
+	rtw_write32_mask(rtwdev, REG_CCK_FA_RST_11N, BIT(15) | BIT(14), 2);
+	rtw_write32_mask(rtwdev, REG_PAGE_F_RST_11N, BIT(16), 1);
+	rtw_write32_mask(rtwdev, REG_PAGE_F_RST_11N, BIT(16), 0);
+}
+
 static struct rtw_chip_ops rtw8723d_ops = {
 	.phy_set_param		= rtw8723d_phy_set_param,
 	.mac_init_system_cfg	= rtw8723d_mac_init_system_cfg,
@@ -590,6 +653,7 @@ static struct rtw_chip_ops rtw8723d_ops = {
 	.set_antenna		= NULL,
 	.cfg_ldo25		= rtw8723d_cfg_ldo25,
 	.efuse_en		= rtw8723d_efuse_en,
+	.false_alarm_statistics	= rtw8723d_false_alarm_statistics,
 	.config_bfee		= NULL,
 	.set_gid_table		= NULL,
 	.cfg_csi_rate		= NULL,

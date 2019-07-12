@@ -878,6 +878,10 @@ static struct rtw_hw_reg rtw8723d_dig[] = {
 	[1] = { .addr = 0xc50, .mask = 0x7f },
 };
 
+static struct rtw_hw_reg rtw8723d_dig_cck[] = {
+	[0] = { .addr = 0xa0c, .mask = 0x3f00 },
+};
+
 static struct rtw_rf_sipi_addr rtw8723d_rf_sipi_addr[] = {
 	[0] = { .hssi_1 = 0x820, .lssi_read    = 0x8a0,
 		.hssi_2 = 0x824, .lssi_read_pi = 0x8b8},
@@ -921,6 +925,7 @@ struct rtw_chip_info rtw8723d_hw_spec = {
 	.page_table = page_table_8723d,
 	.rqpn_table = rqpn_table_8723d,
 	.dig = rtw8723d_dig,
+	.dig_cck = rtw8723d_dig_cck,
 	.rf_sipi_addr = {0x840, 0x844},
 	.rf_sipi_read_addr = rtw8723d_rf_sipi_addr,
 	.rf_phy_nr = 2,

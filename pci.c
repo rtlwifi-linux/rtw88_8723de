@@ -1194,6 +1194,7 @@ static void rtw_pci_phy_cfg(struct rtw_dev *rtwdev)
 	u16 offset;
 	int i;
 
+	rtwdev->hal.cut_version = ((rtw_read32(rtwdev, 0xF0) >> 12) & 0xF);
 	cut = BIT(0) << rtwdev->hal.cut_version;
 
 	for (i = 0; i < chip->intf_table->n_gen1_para; i++) {

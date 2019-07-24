@@ -94,6 +94,8 @@ struct rtw8723d_efuse {
 #define GET_PHY_STAT_P1_RXSNR_A(phy_stat)                                      \
 	le32_get_bits(*((__le32 *)(phy_stat) + 0x06), GENMASK(7, 0))
 
+#define MASK_Q10_8		0x03ff
+
 #define REG_BTG_SEL		0x0067
 #define REG_LTECOEX_PATH_CONTROL	0x0070
 #define REG_PSDFN		0x0808

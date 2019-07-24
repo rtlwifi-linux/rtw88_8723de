@@ -33,4 +33,19 @@ static inline u8 *get_hdr_bssid(struct ieee80211_hdr *hdr)
 	return bssid;
 }
 
+static inline s32 bits_to_s32(s32 val, int msb, int lsb)
+{
+	return (val << (31 - msb)) >> (31 - msb + lsb);
+}
+
+static inline s32 q16_to_q8(s32 q16)
+{
+	return q16 >> 8;
+}
+
+static inline s32 q16_to_q9(s32 q16)
+{
+	return q16 >> 7;
+}
+
 #endif

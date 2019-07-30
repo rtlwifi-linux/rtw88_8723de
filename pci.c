@@ -13,8 +13,13 @@
 #include "debug.h"
 
 static bool rtw_disable_msi;
+static bool rtw_pcie_support_clkreq;
+
 module_param_named(disable_msi, rtw_disable_msi, bool, 0644);
+module_param_named(support_clkreq, rtw_pcie_support_clkreq, bool, 0444);
+
 MODULE_PARM_DESC(disable_msi, "Set Y to disable MSI interrupt support");
+MODULE_PARM_DESC(support_clkreq, "Set Y to enable pcie clk req");
 
 static u32 rtw_pci_tx_queue_idx_addr[] = {
 	[RTW_TX_QUEUE_BK]	= RTK_PCI_TXBD_IDX_BKQ,
@@ -1089,21 +1094,48 @@ static void rtw_dbi_write8(struct rtw_dev *rtwdev, u16 addr, u8 data)
 	u16 write_addr;
 	u16 remainder = addr & 0x3;
 	u8 flag;
-	u8 cnt = 20;
+	u8 cnt = DBI_RERTY_COUNT;
 
-	write_addr = ((addr & 0x0ffc) | (BIT(0) << (remainder + 12)));
-	rtw_write8(rtwdev, REG_DBI_WDATA_V1 + remainder, data);
-	rtw_write16(rtwdev, REG_DBI_FLAG_V1, write_addr);
-	rtw_write8(rtwdev, REG_DBI_FLAG_V1 + 2, 0x01);
+	write_addr = ((addr & BIT_MASK_DBI_ADDRESS) |
+		      (BIT(0) << (remainder + 12)));
+	rtw_write8(rtwdev, RTK_PCI_DBI_WDATA_V1 + remainder, data);
+	rtw_write16(rtwdev, RTK_PCI_DBI_FLAG_V1, write_addr);
+	rtw_write8(rtwdev, RTK_PCI_DBI_FLAG_V1 + 2, BIT_DBI_WFLAG);
 
-	flag = rtw_read8(rtwdev, REG_DBI_FLAG_V1 + 2);
+	flag = rtw_read8(rtwdev, RTK_PCI_DBI_FLAG_V1 + 2);
 	while (flag && (cnt != 0)) {
 		udelay(10);
-		flag = rtw_read8(rtwdev, REG_DBI_FLAG_V1 + 2);
+		flag = rtw_read8(rtwdev, RTK_PCI_DBI_FLAG_V1 + 2);
 		cnt--;
 	}
 
 	WARN(flag, "DBI write fail\n");
+}
+
+static int rtw_dbi_read8(struct rtw_dev *rtwdev, u16 addr, u8 *value)
+{
+	u16 read_addr = addr & BIT_MASK_DBI_ADDRESS;
+	u8 flag = 0;
+	u8 cnt = DBI_RERTY_COUNT;
+
+	rtw_write16(rtwdev, RTK_PCI_DBI_FLAG_V1, read_addr);
+	rtw_write8(rtwdev, RTK_PCI_DBI_FLAG_V1 + 2, BIT_DBI_RFLAG);
+	flag = rtw_read8(rtwdev, RTK_PCI_DBI_FLAG_V1 + 2);
+
+	while (flag && (cnt != 0)) {
+		udelay(10);
+		flag = rtw_read8(rtwdev, RTK_PCI_DBI_FLAG_V1 + 2);
+		cnt--;
+	}
+	if (flag) {
+		return -EIO;
+		WARN(flag, "DBI read fail\n");
+	}
+
+	read_addr = RTK_PCI_DBI_RDATA_V1 + (addr & 3);
+	*value = rtw_read8(rtwdev, read_addr);
+
+	return 0;
 }
 
 static void rtw_mdio_write(struct rtw_dev *rtwdev, u8 addr, u16 data, bool g1)
@@ -1173,6 +1205,21 @@ static void rtw_pci_phy_cfg(struct rtw_dev *rtwdev)
 	}
 }
 
+void rtw_pci_config_clkreq(struct rtw_dev *rtwdev)
+{
+	u8 value;
+
+	if (rtw_dbi_read8(rtwdev, RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD, &value))
+		return;
+
+	if (rtw_pcie_support_clkreq)
+		value |= BIT_PCIE_CFG_REAL_EN_CLKREQ;
+	else
+		value &= ~(BIT_PCIE_CFG_REAL_EN_CLKREQ);
+
+	rtw_dbi_write8(rtwdev, RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD, value);
+}
+
 #ifdef CONFIG_PM
 static int rtw_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 {
@@ -1234,6 +1281,7 @@ static int rtw_pci_setup_resource(struct rtw_dev *rtwdev, struct pci_dev *pdev)
 	}
 
 	rtw_pci_phy_cfg(rtwdev);
+	rtw_pci_config_clkreq(rtwdev);
 
 	return 0;
 

@@ -19,8 +19,13 @@
 #define RTK_PCI_CTRL		0x300
 #define BIT_RST_TRXDMA_INTF	BIT(20)
 #define BIT_RX_TAG_EN		BIT(15)
-#define REG_DBI_WDATA_V1	0x03E8
-#define REG_DBI_FLAG_V1		0x03F0
+#define RTK_PCI_DBI_WDATA_V1	0x03E8
+#define RTK_PCI_DBI_RDATA_V1	0x03EC
+#define RTK_PCI_DBI_FLAG_V1	0x03F0
+#define BIT_DBI_RFLAG		BIT(1)
+#define BIT_DBI_WFLAG		BIT(0)
+#define BIT_MASK_DBI_ADDRESS	0x0FFC
+
 #define REG_MDIO_V1		0x03F4
 #define REG_PCIE_MIX_CFG	0x03F8
 #define BIT_MDIO_WFLAG_V1	BIT(5)
@@ -127,6 +132,10 @@
 #define IMR_H2CDOK		BIT(16)
 
 #define AVG_AMPDU_SIZE		16
+
+#define DBI_RERTY_COUNT		20
+#define RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD	0x0719
+#define BIT_PCIE_CFG_REAL_EN_CLKREQ	BIT(4)
 
 /* one element is reserved to know if the ring is closed */
 static inline int avail_desc(u32 wp, u32 rp, u32 len)

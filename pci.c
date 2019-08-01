@@ -14,12 +14,15 @@
 
 static bool rtw_disable_msi;
 static bool rtw_pcie_support_clkreq;
+static unsigned int rtw_pcie_support_aspm_L1;
 
 module_param_named(disable_msi, rtw_disable_msi, bool, 0644);
 module_param_named(support_clkreq, rtw_pcie_support_clkreq, bool, 0444);
+module_param_named(support_aspm_L1, rtw_pcie_support_aspm_L1, uint, 0444);
 
 MODULE_PARM_DESC(disable_msi, "Set Y to disable MSI interrupt support");
 MODULE_PARM_DESC(support_clkreq, "Set Y to enable pcie clk req");
+MODULE_PARM_DESC(support_aspm_L1, "PCIE aspm L1 mode. If 0, aspm L1 is disabled");
 
 static u32 rtw_pci_tx_queue_idx_addr[] = {
 	[RTW_TX_QUEUE_BK]	= RTK_PCI_TXBD_IDX_BKQ,
@@ -1220,6 +1223,35 @@ void rtw_pci_config_clkreq(struct rtw_dev *rtwdev)
 	rtw_dbi_write8(rtwdev, RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD, value);
 }
 
+void __rtw_pci_config_aspm_L1(struct rtw_dev *rtwdev, bool enable)
+{
+	u8 value;
+
+	if (rtw_dbi_read8(rtwdev, RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD, &value))
+		return;
+
+	if (enable)
+		value |= BIT_PCIE_CFG_REAL_EN_L1;
+	else
+		value &= ~(BIT_PCIE_CFG_REAL_EN_L1);
+
+	rtw_dbi_write8(rtwdev, RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD, value);
+}
+
+void rtw_pci_config_aspm_L1(struct rtw_dev *rtwdev)
+{
+	switch (rtw_pcie_support_aspm_L1) {
+	case RTW_PCIE_ASPM_L1_DISABLE:
+		__rtw_pci_config_aspm_L1(rtwdev, false);
+		break;
+	case RTW_PCIE_ASPM_L1_ENABLE:
+		__rtw_pci_config_aspm_L1(rtwdev, true);
+		break;
+	default:
+		break;
+	}
+}
+
 #ifdef CONFIG_PM
 static int rtw_pci_suspend(struct pci_dev *pdev, pm_message_t state)
 {
@@ -1282,6 +1314,7 @@ static int rtw_pci_setup_resource(struct rtw_dev *rtwdev, struct pci_dev *pdev)
 
 	rtw_pci_phy_cfg(rtwdev);
 	rtw_pci_config_clkreq(rtwdev);
+	rtw_pci_config_aspm_L1(rtwdev);
 
 	return 0;
 

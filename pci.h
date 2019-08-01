@@ -136,6 +136,12 @@
 #define DBI_RERTY_COUNT		20
 #define RTK_PCIE_CFG_FORCE_CLKREQ_N_PAD	0x0719
 #define BIT_PCIE_CFG_REAL_EN_CLKREQ	BIT(4)
+#define BIT_PCIE_CFG_REAL_EN_L1		BIT(3)
+
+enum rtw_pci_aspm_L1_mode {
+	RTW_PCIE_ASPM_L1_DISABLE,
+	RTW_PCIE_ASPM_L1_ENABLE,
+};
 
 /* one element is reserved to know if the ring is closed */
 static inline int avail_desc(u32 wp, u32 rp, u32 len)

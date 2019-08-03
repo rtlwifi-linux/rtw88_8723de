@@ -24,6 +24,8 @@ static void rtw_wow_resume_wakeup_reason(struct rtw_dev *rtwdev)
 		rtw_dbg(rtwdev, RTW_DBG_WOW, "WOW: Rx magic packet\n");
 	else if (reason == RTW_WOW_RSN_RX_GTK_REKEY)
 		rtw_dbg(rtwdev, RTW_DBG_WOW, "WOW: Rx gtk rekey\n");
+	else if (reason == RTW_WOW_RSN_RX_PATTERN_MATCH)
+		rtw_dbg(rtwdev, RTW_DBG_WOW, "WOW: Rx pattern match packet\n");
 	else
 		rtw_warn(rtwdev, "Unknown wakeup reason %x\n", reason);
 }
@@ -123,12 +125,229 @@ static void rtw_wow_fw_security_type(struct rtw_dev *rtwdev)
 					data.group_key_type);
 }
 
+static void __rtw_wow_pattern_write_cam(struct rtw_dev *rtwdev, u8 addr,
+					u32 wdata)
+{
+	bool ret;
+
+	rtw_write32(rtwdev, REG_WKFMCAM_RWD, wdata);
+	rtw_write32(rtwdev, REG_WKFMCAM_CMD, BIT_WKFCAM_POLLING_V1 |
+		    BIT_WKFCAM_WE | BIT_WKFCAM_ADDR_V2(addr));
+
+	ret = check_hw_ready(rtwdev, REG_WKFMCAM_CMD, BIT_WKFCAM_POLLING_V1, 0);
+	if (!ret)
+		rtw_err(rtwdev, "failed to write pattern cam\n");
+}
+
+static void __rtw_wow_pattern_write_cam_ent(struct rtw_dev *rtwdev, u8 id,
+					    struct  rtw_wow_pattern *context)
+{
+	int i;
+	u8 addr;
+	u32 wdata;
+
+	for (i = 0; i < RTW_MAX_PATTERN_MASK_SIZE / 4; i++) {
+		addr = (id << 3) + i;
+		wdata = context->mask[i * 4];
+		wdata |= context->mask[i * 4 + 1] << 8;
+		wdata |= context->mask[i * 4 + 2] << 16;
+		wdata |= context->mask[i * 4 + 3] << 24;
+		__rtw_wow_pattern_write_cam(rtwdev, addr, wdata);
+	}
+
+	wdata = context->crc;
+	addr = (id << 3) + RTW_MAX_PATTERN_MASK_SIZE / 4;
+
+	switch (context->type) {
+	case RTW_PATTERN_BROADCAST:
+		wdata |= BIT_BC | BIT_VALID;
+		break;
+	case RTW_PATTERN_MULTICAST:
+		wdata |= BIT_MC | BIT_VALID;
+		break;
+	case RTW_PATTERN_UNICAST:
+		wdata |= BIT_UC | BIT_VALID;
+		break;
+	default:
+		break;
+	}
+	__rtw_wow_pattern_write_cam(rtwdev, addr, wdata);
+}
+
+/* RTK internal CRC16 for Pattern Cam */
+static u16 __rtw_cal_crc16(u8 data, u16 crc)
+{
+	u8 shift_in, data_bit;
+	u8 crc_bit4, crc_bit11, crc_bit15;
+	u16 crc_result;
+	int index;
+
+	for (index = 0; index < 8; index++) {
+		crc_bit15 = ((crc & BIT(15)) ? 1 : 0);
+		data_bit = (data & (BIT(0) << index) ? 1 : 0);
+		shift_in = crc_bit15 ^ data_bit;
+
+		crc_result = crc << 1;
+
+		if (shift_in == 0)
+			crc_result &= (~BIT(0));
+		else
+			crc_result |= BIT(0);
+
+		crc_bit11 = ((crc & BIT(11)) ? 1 : 0) ^ shift_in;
+
+		if (crc_bit11 == 0)
+			crc_result &= (~BIT(12));
+		else
+			crc_result |= BIT(12);
+
+		crc_bit4 = ((crc & BIT(4)) ? 1 : 0) ^ shift_in;
+
+		if (crc_bit4 == 0)
+			crc_result &= (~BIT(5));
+		else
+			crc_result |= BIT(5);
+
+		crc = crc_result;
+	}
+	return crc;
+}
+
+static u16 rtw_calc_crc(u8 *pdata, int length)
+{
+	u16 crc = 0xffff;
+	int i;
+
+	for (i = 0; i < length; i++)
+		crc = __rtw_cal_crc16(pdata[i], crc);
+
+	/* get 1' complement */
+	return ~crc;
+}
+
+static void rtw_wow_pattern_generate(struct rtw_dev *rtwdev,
+				     struct rtw_vif *rtwvif,
+				     struct cfg80211_pkt_pattern *patterns,
+				     struct rtw_wow_pattern *rtw_pattern)
+{
+	int len = 0;
+	const u8 *mask;
+	const u8 *pattern;
+	u8 mask_hw[RTW_MAX_PATTERN_MASK_SIZE] = {0};
+	u8 content[RTW_MAX_PATTERN_SIZE] = {0};
+	u8 mac_addr[ETH_ALEN] = {0};
+	u8 mask_len = 0;
+	u16 count = 0;
+	int i;
+
+	pattern = patterns->pattern;
+	len = patterns->pattern_len;
+	mask = patterns->mask;
+
+	ether_addr_copy(mac_addr, rtwvif->mac_addr);
+	memset(rtw_pattern, 0, sizeof(struct rtw_wow_pattern));
+
+	mask_len = DIV_ROUND_UP(len, 8);
+
+	if (is_broadcast_ether_addr(pattern))
+		rtw_pattern->type = RTW_PATTERN_BROADCAST;
+	else if (is_multicast_ether_addr(pattern))
+		rtw_pattern->type = RTW_PATTERN_MULTICAST;
+	else if (ether_addr_equal(pattern, mac_addr))
+		rtw_pattern->type = RTW_PATTERN_UNICAST;
+	else
+		rtw_pattern->type = RTW_PATTERN_INVALID;
+
+	/* translate mask from os to mask for hw
+	 * pattern from OS uses 'ethenet frame', like this:
+	 * |    6   |    6   |   2  |     20    |  Variable  |  4  |
+	 * |--------+--------+------+-----------+------------+-----|
+	 * |    802.3 Mac Header    | IP Header | TCP Packet | FCS |
+	 * |   DA   |   SA   | Type |
+	 *
+	 * BUT, packet catched by our HW is in '802.11 frame', begin from LLC
+	 * |     24 or 30      |    6   |   2  |     20    |  Variable  |  4  |
+	 * |-------------------+--------+------+-----------+------------+-----|
+	 * | 802.11 MAC Header |       LLC     | IP Header | TCP Packet | FCS |
+	 *		       | Others | Tpye |
+	 *
+	 * Therefore, we need translate mask_from_OS to mask_to_hw.
+	 * We should left-shift mask by 6 bits, then set the new bit[0~5] = 0,
+	 * because new mask[0~5] means 'SA', but our HW packet begins from LLC,
+	 * bit[0~5] corresponds to first 6 Bytes in LLC, they just don't match.
+	 */
+
+	/* Shift 6 bits */
+	for (i = 0; i < mask_len - 1; i++) {
+		mask_hw[i] = mask[i] >> 6;
+		mask_hw[i] |= (mask[i + 1] & 0x3F) << 2;
+	}
+
+	mask_hw[i] = (mask[i] >> 6) & 0x3F;
+	/* Set bit 0-5 to zero */
+	mask_hw[0] &= ~(0x3F);
+
+	memcpy(rtw_pattern->mask, mask_hw, RTW_MAX_PATTERN_MASK_SIZE);
+
+	/* To get the wake up pattern from the mask.
+	 * We do not count first 12 bits which means
+	 * DA[6] and SA[6] in the pattern to match HW design.
+	 */
+	count = 0;
+	for (i = 12; i < len; i++) {
+		if ((mask[i / 8] >> (i % 8)) & 0x01) {
+			content[count] = pattern[i];
+			count++;
+		}
+	}
+
+	rtw_pattern->crc = rtw_calc_crc(content, count);
+
+	if (rtw_pattern->crc != 0) {
+		if (rtw_pattern->type == RTW_PATTERN_INVALID)
+			rtw_pattern->type = RTW_PATTERN_VALID;
+	}
+}
+
+static void __rtw_wow_pattern_clear_cam(struct rtw_dev *rtwdev)
+{
+	bool ret;
+
+	rtw_write32(rtwdev, REG_WKFMCAM_CMD, BIT_WKFCAM_POLLING_V1 |
+		    BIT_WKFCAM_CLR_V1);
+
+	ret = check_hw_ready(rtwdev, REG_WKFMCAM_CMD, BIT_WKFCAM_POLLING_V1, 0);
+	if (!ret)
+		rtw_err(rtwdev, "failed to clean pattern cam\n");
+}
+
+static void rtw_wow_enable_pattern(struct rtw_dev *rtwdev)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	struct rtw_wow_pattern *rtw_pattern = rtw_wow->patterns;
+	int i = 0;
+
+	for (i = 0; i < rtw_wow->pattern_cnt; i++)
+		__rtw_wow_pattern_write_cam_ent(rtwdev, i, rtw_pattern + i);
+}
+
+static void rtw_wow_disable_pattern(struct rtw_dev *rtwdev)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+
+	__rtw_wow_pattern_clear_cam(rtwdev);
+
+	rtw_wow->pattern_cnt = 0;
+	memset(rtw_wow->patterns, 0, sizeof(rtw_wow->patterns));
+}
+
 static void rtw_wow_fw_enable(struct rtw_dev *rtwdev)
 {
 	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
 
 	if (rtw_wow->suspend_mode == RTW_SUSPEND_LINKED) {
 		rtw_send_rsvd_page_h2c(rtwdev);
+		rtw_wow_enable_pattern(rtwdev);
 		rtw_wow_fw_security_type(rtwdev);
 		rtw_fw_set_disconnect_decision_cmd(rtwdev, true);
 		rtw_fw_set_keep_alive_cmd(rtwdev, true);
@@ -145,6 +364,7 @@ static void rtw_wow_fw_disable(struct rtw_dev *rtwdev)
 	if (rtw_wow->suspend_mode == RTW_SUSPEND_LINKED) {
 		rtw_fw_set_disconnect_decision_cmd(rtwdev, false);
 		rtw_fw_set_keep_alive_cmd(rtwdev, false);
+		rtw_wow_disable_pattern(rtwdev);
 	}
 	rtw_fw_set_wowlan_ctrl_cmd(rtwdev, false);
 	rtw_fw_set_remote_wake_ctrl_cmd(rtwdev, false);
@@ -226,11 +446,26 @@ static void rtw_wow_set_param(struct rtw_dev *rtwdev,
 			      struct cfg80211_wowlan *wowlan)
 {
 	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	struct rtw_wow_pattern *rtw_pattern = rtw_wow->patterns;
+	struct ieee80211_vif *wow_vif = rtw_wow->wow_vif;
+	struct rtw_vif *rtwvif = (struct rtw_vif *)wow_vif->drv_priv;
+	int i;
+
+	rtw_dbg(rtwdev, RTW_DBG_WOW, "WOW: Pattern Count %d\n",
+		wowlan->n_patterns);
 
 	rtw_wow->any = wowlan->any;
 	rtw_wow->disconnect = wowlan->disconnect;
 	rtw_wow->magic_pkt = wowlan->magic_pkt;
 	rtw_wow->gtk_rekey_failure = wowlan->gtk_rekey_failure;
+
+	if (!wowlan->n_patterns || !wowlan->patterns)
+		return;
+
+	rtw_wow->pattern_cnt = wowlan->n_patterns;
+	for (i = 0; i < wowlan->n_patterns; i++)
+		rtw_wow_pattern_generate(rtwdev, rtwvif, wowlan->patterns + i,
+					 rtw_pattern + i);
 }
 
 static void rtw_wow_suspend_normal_mode(struct rtw_dev *rtwdev,

@@ -1402,7 +1402,9 @@ static const struct wiphy_wowlan_support rtw_wowlan_stub = {
 	.flags = WIPHY_WOWLAN_ANY | WIPHY_WOWLAN_DISCONNECT |
 		 WIPHY_WOWLAN_MAGIC_PKT | WIPHY_WOWLAN_GTK_REKEY_FAILURE |
 		 WIPHY_WOWLAN_SUPPORTS_GTK_REKEY,
-	.n_patterns = 0,
+	.n_patterns = RTW_MAX_PATTERN_NUM,
+	.pattern_max_len = RTW_MAX_PATTERN_SIZE,
+	.pattern_min_len = 1,
 };
 
 int rtw_register_hw(struct rtw_dev *rtwdev, struct ieee80211_hw *hw)

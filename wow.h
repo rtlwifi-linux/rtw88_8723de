@@ -5,6 +5,9 @@
 #ifndef __RTW_WOW_H__
 #define __RTW_WOW_H__
 
+#define RTW_MAX_NLO_COUNT              4
+#define RTW_MAX_PATTERN_SIZE		128
+
 enum pattern_type {
 	RTW_PATTERN_BROADCAST = 0,
 	RTW_PATTERN_MULTICAST,
@@ -16,6 +19,7 @@ enum pattern_type {
 enum rtw_suspend_mode {
 	RTW_SUSPEND_IDLE = 0x0,
 	RTW_SUSPEND_LINKED = 0x01,
+	RTW_SUSPEND_NO_LINK = 0x02,
 };
 
 enum rtw_wake_reason {
@@ -24,6 +28,7 @@ enum rtw_wake_reason {
 	RTW_WOW_RSN_DISCONNECT = 0x10,
 	RTW_WOW_RSN_RX_MAGIC_PKT = 0x21,
 	RTW_WOW_RSN_RX_PATTERN_MATCH = 0x23,
+	RTW_WOW_RSN_RX_NLO = 0x55,
 };
 
 struct rtw_fw_media_status_iter_data {
@@ -50,5 +55,8 @@ static inline bool rtw_wow_supported(struct rtw_dev *rtwdev)
 
 int rtw_wow_suspend(struct rtw_dev *rtwdev, struct cfg80211_wowlan *wowlan);
 int rtw_wow_resume(struct rtw_dev *rtwdev);
+int rtw_wow_store_scan_param(struct rtw_dev *rtwdev, struct ieee80211_vif *vif,
+			     struct cfg80211_sched_scan_request *req);
+int rtw_wow_clear_scan_param(struct rtw_dev *rtwdev, struct ieee80211_vif *vif);
 
 #endif

@@ -26,6 +26,8 @@ static void rtw_wow_resume_wakeup_reason(struct rtw_dev *rtwdev)
 		rtw_dbg(rtwdev, RTW_DBG_WOW, "WOW: Rx gtk rekey\n");
 	else if (reason == RTW_WOW_RSN_RX_PATTERN_MATCH)
 		rtw_dbg(rtwdev, RTW_DBG_WOW, "WOW: Rx pattern match packet\n");
+	else if (reason == RTW_WOW_RSN_RX_NLO)
+		rtw_dbg(rtwdev, RTW_DBG_WOW, "Rx NLO\n");
 	else
 		rtw_warn(rtwdev, "Unknown wakeup reason %x\n", reason);
 }
@@ -351,7 +353,12 @@ static void rtw_wow_fw_enable(struct rtw_dev *rtwdev)
 		rtw_wow_fw_security_type(rtwdev);
 		rtw_fw_set_disconnect_decision_cmd(rtwdev, true);
 		rtw_fw_set_keep_alive_cmd(rtwdev, true);
+	} else {
+		rtw_fw_set_nlo_info(rtwdev, true);
+		rtw_fw_update_pkt_probe_req(rtwdev, NULL);
+		rtw_fw_channel_switch(rtwdev, true);
 	}
+
 	rtw_fw_set_wowlan_ctrl_cmd(rtwdev, true);
 	rtw_fw_set_remote_wake_ctrl_cmd(rtwdev, true);
 	rtw_wow_check_fw_status(rtwdev, true);
@@ -365,7 +372,11 @@ static void rtw_wow_fw_disable(struct rtw_dev *rtwdev)
 		rtw_fw_set_disconnect_decision_cmd(rtwdev, false);
 		rtw_fw_set_keep_alive_cmd(rtwdev, false);
 		rtw_wow_disable_pattern(rtwdev);
+	} else {
+		rtw_fw_channel_switch(rtwdev, false);
+		rtw_fw_set_nlo_info(rtwdev, false);
 	}
+
 	rtw_fw_set_wowlan_ctrl_cmd(rtwdev, false);
 	rtw_fw_set_remote_wake_ctrl_cmd(rtwdev, false);
 	rtw_wow_check_fw_status(rtwdev, false);
@@ -535,6 +546,40 @@ unlock:
 	return ret;
 }
 
+static int rtw_wow_suspend_no_link(struct rtw_dev *rtwdev)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	int ret;
+
+	mutex_lock(&rtwdev->mutex);
+
+	cancel_delayed_work_sync(&rtwdev->watch_dog_work);
+	cancel_work_sync(&rtwdev->c2h_work);
+
+	if (test_bit(RTW_FLAG_INACTIVE_PS, rtwdev->flags)) {
+		rtw_leave_ips(rtwdev);
+		rtw_wow->enter_ips = true;
+	}
+
+	rtw_wow->suspend_mode = RTW_SUSPEND_NO_LINK;
+
+	ret = rtw_wow_suspend_start(rtwdev);
+	if (ret && rtw_wow->enter_ips) {
+		rtw_wow->suspend_mode = RTW_SUSPEND_IDLE;
+		rtw_enter_ips(rtwdev);
+		rtw_wow->enter_ips = false;
+		goto unlock;
+	}
+
+	/* firmware enter/leave deep ps if deep ps is supported */
+	if (rtw_fw_lps_deep_mode)
+		set_bit(RTW_FLAG_LEISURE_PS_DEEP, rtwdev->flags);
+
+unlock:
+	mutex_unlock(&rtwdev->mutex);
+	return ret;
+}
+
 static void rtw_wow_awake(struct rtw_dev *rtwdev, u8 *txpause_status)
 {
 	rtw_wow_fw_disable(rtwdev);
@@ -588,6 +633,30 @@ static int rtw_wow_resume_linked(struct rtw_dev *rtwdev)
 	return ret;
 }
 
+static int rtw_wow_resume_no_link(struct rtw_dev *rtwdev)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	int ret = 0;
+
+	mutex_lock(&rtwdev->mutex);
+
+	if (rtw_fw_lps_deep_mode)
+		rtw_leave_lps_deep(rtwdev);
+
+	rtw_wow_resume_wakeup_reason(rtwdev);
+
+	ret = rtw_wow_resume_start(rtwdev);
+
+	if (rtw_wow->enter_ips) {
+		rtw_enter_ips(rtwdev);
+		rtw_wow->enter_ips = false;
+	}
+
+	mutex_unlock(&rtwdev->mutex);
+
+	return ret;
+}
+
 static void rtw_wow_suspend_iter(void *data, u8 *mac, struct ieee80211_vif *vif)
 {
 	struct rtw_dev *rtwdev = data;
@@ -604,6 +673,9 @@ int rtw_wow_suspend(struct rtw_dev *rtwdev, struct cfg80211_wowlan *wowlan)
 {
 	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
 
+	if (rtw_wow->pno_req.inited && rtw_wow->wow_vif)
+		return rtw_wow_suspend_no_link(rtwdev);
+
 	rtw_iterate_vifs_atomic(rtwdev, rtw_wow_suspend_iter, rtwdev);
 	if (rtw_wow->wow_vif)
 		return rtw_wow_suspend_linked(rtwdev, wowlan);
@@ -618,6 +690,69 @@ int rtw_wow_resume(struct rtw_dev *rtwdev)
 
 	if (rtw_wow->suspend_mode == RTW_SUSPEND_LINKED)
 		ret = rtw_wow_resume_linked(rtwdev);
+	else if (rtw_wow->suspend_mode == RTW_SUSPEND_NO_LINK)
+		ret = rtw_wow_resume_no_link(rtwdev);
 
 	return ret;
+}
+
+int rtw_wow_store_scan_param(struct rtw_dev *rtwdev, struct ieee80211_vif *vif,
+			     struct cfg80211_sched_scan_request *req)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	struct rtw_pno_request *rtw_pno_req = &rtw_wow->pno_req;
+	int size;
+	int i;
+
+	if (rtw_pno_req->inited)
+		return -EBUSY;
+
+	if (!req->n_match_sets || !req->match_sets)
+		return -EINVAL;
+
+	size = sizeof(struct cfg80211_match_set) * req->n_match_sets;
+	rtw_pno_req->match_sets = kmalloc(size, GFP_KERNEL);
+
+	if (!rtw_pno_req->match_sets)
+		return -ENOMEM;
+
+	rtw_pno_req->match_set_cnt = req->n_match_sets;
+	memcpy(rtw_pno_req->match_sets, req->match_sets, size);
+
+	size = sizeof(struct ieee80211_channel) * req->n_channels;
+	rtw_pno_req->channels = kmalloc(size, GFP_KERNEL);
+
+	if (!rtw_pno_req->channels) {
+		kfree(rtw_pno_req->match_sets);
+		return -ENOMEM;
+	}
+
+	rtw_pno_req->channel_cnt = req->n_channels;
+
+	for (i = 0 ; i < rtw_pno_req->channel_cnt; i++) {
+		memcpy(rtw_pno_req->channels + i, *(req->channels + i),
+		       sizeof(struct ieee80211_channel));
+	}
+
+	rtw_wow->wow_vif = vif;
+	rtw_pno_req->inited = true;
+
+	return 0;
+}
+
+int rtw_wow_clear_scan_param(struct rtw_dev *rtwdev, struct ieee80211_vif *vif)
+{
+	struct rtw_wow_param *rtw_wow = &rtwdev->wow;
+	struct rtw_pno_request *pno_req = &rtw_wow->pno_req;
+
+	if (!pno_req->inited)
+		return -EINVAL;
+
+	kfree(pno_req->match_sets);
+	kfree(pno_req->channels);
+	pno_req->match_set_cnt = 0;
+	pno_req->channel_cnt = 0;
+	pno_req->inited = false;
+
+	return 0;
 }

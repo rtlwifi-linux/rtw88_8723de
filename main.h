@@ -874,6 +874,14 @@ struct rtw_wow_pattern {
 	u8 mask[RTW_MAX_PATTERN_MASK_SIZE];
 };
 
+struct rtw_pno_request {
+	bool inited;
+	u32 match_set_cnt;
+	struct cfg80211_match_set *match_sets;
+	u8 channel_cnt;
+	struct ieee80211_channel *channels;
+};
+
 struct rtw_wow_param {
 	struct ieee80211_vif *wow_vif;
 	u8 suspend_mode;
@@ -884,6 +892,9 @@ struct rtw_wow_param {
 
 	u8 pattern_cnt;
 	struct rtw_wow_pattern patterns[RTW_MAX_PATTERN_NUM];
+
+	bool enter_ips;
+	struct rtw_pno_request pno_req;
 };
 
 struct rtw_intf_phy_para_table {
@@ -1560,6 +1571,18 @@ static inline struct ieee80211_txq *rtwtxq_to_txq(struct rtw_txq *rtwtxq)
 	void *p = rtwtxq;
 
 	return container_of(p, struct ieee80211_txq, drv_priv);
+}
+
+static inline bool rtw_ssid_equal(struct cfg80211_ssid *a,
+				  struct cfg80211_ssid *b)
+{
+	if (!a || !b || a->ssid_len != b->ssid_len)
+		return false;
+
+	if (memcmp(a->ssid, b->ssid, a->ssid_len))
+		return false;
+
+	return true;
 }
 
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,

@@ -1441,6 +1441,10 @@ int rtw_register_hw(struct rtw_dev *rtwdev, struct ieee80211_hw *hw)
 
 #ifdef CONFIG_PM
 	hw->wiphy->wowlan = &rtw_wowlan_stub;
+	hw->wiphy->max_sched_scan_reqs = 1;
+	hw->wiphy->max_match_sets = RTW_MAX_NLO_COUNT;
+	hw->wiphy->max_sched_scan_ssids = RTW_MAX_NLO_COUNT;
+	hw->wiphy->features |= NL80211_FEATURE_SCHED_SCAN_RANDOM_MAC_ADDR;
 #endif
 	rtw_set_supported_band(hw, rtwdev->chip);
 	SET_IEEE80211_PERM_ADDR(hw, rtwdev->efuse.addr);

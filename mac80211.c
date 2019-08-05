@@ -689,6 +689,29 @@ static void rtw_ops_set_wakeup(struct ieee80211_hw *hw, bool enabled)
 }
 #endif
 
+static int rtw_ops_sched_scan_start(struct ieee80211_hw *hw,
+				    struct ieee80211_vif *vif,
+				    struct cfg80211_sched_scan_request *req,
+				    struct ieee80211_scan_ies *ies)
+{
+	struct rtw_dev *rtwdev = hw->priv;
+
+	if (!req)
+		return -EINVAL;
+
+	return rtw_wow_store_scan_param(rtwdev, vif, req);
+}
+
+static int rtw_ops_sched_scan_stop(struct ieee80211_hw *hw,
+				   struct ieee80211_vif *vif)
+{
+	struct rtw_dev *rtwdev = hw->priv;
+
+	rtw_wow_clear_scan_param(rtwdev, vif);
+
+	return 0;
+}
+
 const struct ieee80211_ops rtw_ops = {
 	.tx			= rtw_ops_tx,
 	.wake_tx_queue		= rtw_ops_wake_tx_queue,
@@ -715,5 +738,7 @@ const struct ieee80211_ops rtw_ops = {
 	.resume			= rtw_ops_resume,
 	.set_wakeup		= rtw_ops_set_wakeup,
 #endif
+	.sched_scan_start       = rtw_ops_sched_scan_start,
+	.sched_scan_stop        = rtw_ops_sched_scan_stop,
 };
 EXPORT_SYMBOL(rtw_ops);

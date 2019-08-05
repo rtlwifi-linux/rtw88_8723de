@@ -17,9 +17,9 @@
 #include "bf.h"
 #include "wow.h"
 
-unsigned int rtw_fw_lps_deep_mode;
+unsigned int rtw_fw_lps_deep_mode = LPS_DEEP_MODE_LCLK;
 EXPORT_SYMBOL(rtw_fw_lps_deep_mode);
-static bool rtw_fw_support_lps;
+static bool rtw_fw_support_lps = true;
 bool rtw_bf_support = true;
 unsigned int rtw_debug_mask;
 EXPORT_SYMBOL(rtw_debug_mask);

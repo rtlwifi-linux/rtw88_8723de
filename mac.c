@@ -1048,8 +1048,11 @@ static int txdma_queue_mapping(struct rtw_dev *rtwdev)
 
 	rtw_write8(rtwdev, REG_CR, 0);
 	rtw_write8(rtwdev, REG_CR, MAC_TRX_ENABLE);
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto out;
 	rtw_write32(rtwdev, REG_H2CQ_CSR, BIT_H2CQ_FULL);
 
+out:
 	return 0;
 }
 
@@ -1166,6 +1169,9 @@ static int init_h2c(struct rtw_dev *rtwdev)
 	u32 h2cq_size;
 	u32 h2cq_free;
 	u32 wp, rp;
+
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		return 0;
 
 	h2cq_addr = fifo->rsvd_h2cq_addr << TX_PAGE_SIZE_SHIFT;
 	h2cq_size = RSVD_PG_H2CQ_NUM << TX_PAGE_SIZE_SHIFT;

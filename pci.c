@@ -411,8 +411,11 @@ static void rtw_pci_reset_buf_desc(struct rtw_dev *rtwdev)
 	dma = rtwpci->tx_rings[RTW_TX_QUEUE_H2C].r.dma;
 	rtwpci->tx_rings[RTW_TX_QUEUE_H2C].r.rp = 0;
 	rtwpci->tx_rings[RTW_TX_QUEUE_H2C].r.wp = 0;
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto h2cq_done;
 	rtw_write16(rtwdev, RTK_PCI_TXBD_NUM_H2CQ, len);
 	rtw_write32(rtwdev, RTK_PCI_TXBD_DESA_H2CQ, dma);
+h2cq_done:
 
 	len = rtwpci->tx_rings[RTW_TX_QUEUE_BK].r.len;
 	dma = rtwpci->tx_rings[RTW_TX_QUEUE_BK].r.dma;
@@ -467,6 +470,8 @@ static void rtw_pci_reset_buf_desc(struct rtw_dev *rtwdev)
 	rtw_write32(rtwdev, RTK_PCI_TXBD_RWPTR_CLR, 0xffffffff);
 
 	/* rest H2C Queue index */
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		return;
 	rtw_write32_set(rtwdev, RTK_PCI_TXBD_H2CQ_CSR, BIT_CLR_H2CQ_HOST_IDX);
 	rtw_write32_set(rtwdev, RTK_PCI_TXBD_H2CQ_CSR, BIT_CLR_H2CQ_HW_IDX);
 }
@@ -481,7 +486,10 @@ static void rtw_pci_enable_interrupt(struct rtw_dev *rtwdev,
 {
 	rtw_write32(rtwdev, RTK_PCI_HIMR0, rtwpci->irq_mask[0]);
 	rtw_write32(rtwdev, RTK_PCI_HIMR1, rtwpci->irq_mask[1]);
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto done;
 	rtw_write32(rtwdev, RTK_PCI_HIMR3, rtwpci->irq_mask[3]);
+done:
 	rtwpci->irq_enabled = true;
 }
 
@@ -490,7 +498,10 @@ static void rtw_pci_disable_interrupt(struct rtw_dev *rtwdev,
 {
 	rtw_write32(rtwdev, RTK_PCI_HIMR0, 0);
 	rtw_write32(rtwdev, RTK_PCI_HIMR1, 0);
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N)
+		goto done;
 	rtw_write32(rtwdev, RTK_PCI_HIMR3, 0);
+done:
 	rtwpci->irq_enabled = false;
 }
 
@@ -1010,12 +1021,18 @@ static void rtw_pci_irq_recognized(struct rtw_dev *rtwdev,
 {
 	irq_status[0] = rtw_read32(rtwdev, RTK_PCI_HISR0);
 	irq_status[1] = rtw_read32(rtwdev, RTK_PCI_HISR1);
-	irq_status[3] = rtw_read32(rtwdev, RTK_PCI_HISR3);
 	irq_status[0] &= rtwpci->irq_mask[0];
 	irq_status[1] &= rtwpci->irq_mask[1];
-	irq_status[3] &= rtwpci->irq_mask[3];
 	rtw_write32(rtwdev, RTK_PCI_HISR0, irq_status[0]);
 	rtw_write32(rtwdev, RTK_PCI_HISR1, irq_status[1]);
+
+	if (rtwdev->chip->wlan_cpu == RTW_WCPU_11N) {
+		irq_status[3] = 0;
+		return;
+	}
+
+	irq_status[3] = rtw_read32(rtwdev, RTK_PCI_HISR3);
+	irq_status[3] &= rtwpci->irq_mask[3];
 	rtw_write32(rtwdev, RTK_PCI_HISR3, irq_status[3]);
 }
 

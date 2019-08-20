@@ -1517,6 +1517,22 @@ static void rtw_pci_remove(struct pci_dev *pdev)
 	ieee80211_free_hw(hw);
 }
 
+static void rtw_pci_shutdown(struct pci_dev *pdev)
+{
+	struct ieee80211_hw *hw = pci_get_drvdata(pdev);
+	struct rtw_dev *rtwdev;
+	struct rtw_chip_info *chip;
+
+	if (!hw)
+		return;
+
+	rtwdev = hw->priv;
+	chip = rtwdev->chip;
+
+	if (chip->ops->shutdown)
+		chip->ops->shutdown(rtwdev);
+}
+
 static const struct pci_device_id rtw_pci_id_table[] = {
 #ifdef CONFIG_RTW88_8822BE
 	{ RTK_PCI_DEVICE(PCI_VENDOR_ID_REALTEK, 0xB822, rtw8822b_hw_spec) },
@@ -1536,6 +1552,7 @@ static struct pci_driver rtw_pci_driver = {
 	.id_table = rtw_pci_id_table,
 	.probe = rtw_pci_probe,
 	.remove = rtw_pci_remove,
+	.shutdown = rtw_pci_shutdown,
 #ifdef CONFIG_PM
 	.suspend = rtw_pci_suspend,
 	.resume = rtw_pci_resume,

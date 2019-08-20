@@ -761,6 +761,7 @@ struct rtw_regulatory {
 struct rtw_chip_ops {
 	int (*mac_init)(struct rtw_dev *rtwdev);
 	int (*mac_init_system_cfg)(struct rtw_dev *rtwdev);
+	void (*shutdown)(struct rtw_dev *rtwdev);
 	int (*read_efuse)(struct rtw_dev *rtwdev, u8 *map);
 	void (*phy_set_param)(struct rtw_dev *rtwdev);
 	void (*set_channel)(struct rtw_dev *rtwdev, u8 channel,

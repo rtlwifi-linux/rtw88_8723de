@@ -751,6 +751,7 @@ struct rtw_vif {
 	u8 bssid[ETH_ALEN];
 	u8 port;
 	u8 bcn_ctrl;
+	struct ieee80211_tx_queue_params tx_params[IEEE80211_NUM_ACS];
 	const struct rtw_vif_port *conf;
 
 	struct rtw_traffic_stats stats;
@@ -1739,6 +1740,13 @@ static inline void rtw_efuse_en(struct rtw_dev *rtwdev, bool enable)
 static inline bool rtw_chip_wcpu_11n(struct rtw_dev *rtwdev)
 {
 	return rtwdev->chip->wlan_cpu == RTW_WCPU_11N;
+}
+
+static inline struct ieee80211_vif *rtwvif_to_vif(struct rtw_vif *rtwvif)
+{
+	void *p = rtwvif;
+
+	return container_of(p, struct ieee80211_vif, drv_priv);
 }
 
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,

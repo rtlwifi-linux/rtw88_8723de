@@ -562,7 +562,7 @@ struct rtw_rx_pkt_stat {
 	u8 rssi;
 	u8 rxsc;
 	s8 rx_snr[RTW_RF_PATH_MAX];
-	u8 rx_evm[RTW_RF_PATH_MAX];
+	s8 rx_evm[RTW_RF_PATH_MAX];
 	s8 cfo_tail[RTW_RF_PATH_MAX];
 
 	struct rtw_sta_info *si;

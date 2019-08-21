@@ -840,7 +840,6 @@ static void query_phy_status_page1(struct rtw_dev *rtwdev, u8 *phy_status,
 	u8 rxsc, bw;
 	s8 min_rx_power = -120;
 	s8 rx_evm;
-	u8 evm_dbm = 0;
 	u8 rssi;
 	int path;
 
@@ -883,15 +882,9 @@ static void query_phy_status_page1(struct rtw_dev *rtwdev, u8 *phy_status,
 		dm_info->rx_snr[path] = pkt_stat->rx_snr[path] >> 1;
 		dm_info->cfo_tail[path] = (pkt_stat->cfo_tail[path] * 5) >> 1;
 
-		rx_evm = pkt_stat->rx_evm[path];
-
-		if (rx_evm < 0) {
-			evm_dbm = ((u8)-rx_evm >> 1);
-
-			if (evm_dbm == 64)
-				evm_dbm = 0;
-		}
-		dm_info->rx_evm_dbm[path] = evm_dbm;
+		rx_evm = clamp_t(s8, -pkt_stat->rx_evm[path] >> 1, 0, 64);
+		rx_evm &= 0x3F;	/* 64->0: second path of 1SS rate is 64 */
+		dm_info->rx_evm_dbm[path] = rx_evm;
 	}
 }
 

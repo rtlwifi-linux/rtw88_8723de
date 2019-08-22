@@ -133,6 +133,7 @@ struct rtw_power_params {
 	u8 pwr_base;
 	s8 pwr_offset;
 	s8 pwr_limit;
+	s8 pwr_sar;
 	s8 pwr_remnant;
 };
 
@@ -140,6 +141,8 @@ void
 rtw_get_tx_power_params(struct rtw_dev *rtwdev, u8 path,
 			u8 rate, u8 bw, u8 ch, u8 regd,
 			struct rtw_power_params *pwr_param);
+void rtw_phy_set_tx_power_sar(struct rtw_dev *rtwdev, u8 regd, u8 rfpath,
+			      u8 ch_start, u8 ch_end, u8 sar_q3);
 
 #define	MASKBYTE0		0xff
 #define	MASKBYTE1		0xff00

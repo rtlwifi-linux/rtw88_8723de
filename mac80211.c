@@ -312,7 +312,8 @@ static void rtw_ops_bss_info_changed(struct ieee80211_hw *hw,
 	if (changed & BSS_CHANGED_MU_GROUPS) {
 		struct rtw_chip_info *chip = rtwdev->chip;
 
-		chip->ops->set_gid_table(rtwdev, vif, conf);
+		if (chip->ops->set_gid_table)
+			chip->ops->set_gid_table(rtwdev, vif, conf);
 	}
 
 	rtw_vif_port_config(rtwdev, rtwvif, config);

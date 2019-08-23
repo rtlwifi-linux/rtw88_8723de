@@ -16,6 +16,7 @@
 #include "debug.h"
 #include "bf.h"
 #include "wow.h"
+#include "sar.h"
 
 unsigned int rtw_fw_lps_deep_mode = LPS_DEEP_MODE_LCLK;
 EXPORT_SYMBOL(rtw_fw_lps_deep_mode);
@@ -1277,6 +1278,7 @@ static int rtw_chip_board_info_setup(struct rtw_dev *rtwdev)
 	rtw_load_table(rtwdev, rfe_def->txpwr_lmt_tbl);
 	rtw_phy_tx_power_by_rate_config(hal);
 	rtw_phy_tx_power_limit_config(hal);
+	rtw_sar_load_table(rtwdev);
 
 	return 0;
 }

@@ -2481,6 +2481,28 @@ static const struct rtw_pwr_track_tbl rtw8723d_rtw_pwr_track_tbl = {
 	.pwrtrk_xtal_n = rtw8723d_pwrtrk_xtal_n,
 };
 
+static const struct rtw_reg_domain coex_info_hw_regs_8723d[] = {
+	{0x948, MASKDWORD, RTW_REG_DOMAIN_MAC32},
+	{0x67, BIT(7), RTW_REG_DOMAIN_MAC8},
+	{0, 0, RTW_REG_DOMAIN_NL},
+	{0x964, BIT(1), RTW_REG_DOMAIN_MAC8},
+	{0x864, BIT(0), RTW_REG_DOMAIN_MAC8},
+	{0xab7, BIT(5), RTW_REG_DOMAIN_MAC8},
+	{0xa01, BIT(7), RTW_REG_DOMAIN_MAC8},
+	{0, 0, RTW_REG_DOMAIN_NL},
+	{0x430, MASKDWORD, RTW_REG_DOMAIN_MAC32},
+	{0x434, MASKDWORD, RTW_REG_DOMAIN_MAC32},
+	{0x42a, MASKLWORD, RTW_REG_DOMAIN_MAC16},
+	{0x426, MASKBYTE0, RTW_REG_DOMAIN_MAC8},
+	{0x45e, BIT(3), RTW_REG_DOMAIN_MAC8},
+	{0, 0, RTW_REG_DOMAIN_NL},
+	{0x4c6, BIT(4), RTW_REG_DOMAIN_MAC8},
+	{0x40, BIT(5), RTW_REG_DOMAIN_MAC8},
+	{0x550, MASKDWORD, RTW_REG_DOMAIN_MAC32},
+	{0x522, MASKBYTE0, RTW_REG_DOMAIN_MAC8},
+	{0x953, BIT(1), RTW_REG_DOMAIN_MAC8},
+};
+
 struct rtw_chip_info rtw8723d_hw_spec = {
 	.ops = &rtw8723d_ops,
 	.id = RTW_CHIP_TYPE_8723D,
@@ -2554,6 +2576,9 @@ struct rtw_chip_info rtw8723d_hw_spec = {
 	.bt_afh_span_bw40 = 0x30,
 	.afh_5g_num = ARRAY_SIZE(afh_5g_8723d),
 	.afh_5g = afh_5g_8723d,
+
+	.coex_info_hw_regs_num = ARRAY_SIZE(coex_info_hw_regs_8723d),
+	.coex_info_hw_regs = coex_info_hw_regs_8723d,
 };
 EXPORT_SYMBOL(rtw8723d_hw_spec);
 

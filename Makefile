@@ -1,4 +1,18 @@
 # SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+KERNELDIR ?= /lib/modules/$(shell uname -r)/build
+PWD       := $(shell pwd)
+
+CONFIG_RTW88_CORE=m
+CONFIG_RTW88_PCI=m
+CONFIG_RTW88_8822BE=y
+CONFIG_RTW88_8822CE=y
+CONFIG_RTW88_8723DE=y
+ccflags-y += -DCONFIG_RTW88_8822BE=y
+ccflags-y += -DCONFIG_RTW88_8822CE=y
+ccflags-y += -DCONFIG_RTW88_8723DE=y
+ccflags-y += -DDEBUG
+ccflags-y += -DCONFIG_RTW88_DEBUG=y
+ccflags-y += -DCONFIG_RTW88_DEBUGFS=y
 
 obj-$(CONFIG_RTW88_CORE)	+= rtw88.o
 rtw88-y += main.o \
@@ -25,3 +39,6 @@ rtw88-$(CONFIG_RTW88_8723DE)	+= rtw8723d.o rtw8723d_table.o
 
 obj-$(CONFIG_RTW88_PCI)		+= rtwpci.o
 rtwpci-objs			:= pci.o
+
+all:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD)

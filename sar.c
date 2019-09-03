@@ -8,155 +8,186 @@
 #include "phy.h"
 #include "sar.h"
 
-#define SAR_WRDS_CHAIN_NUM	2
+#define SAR_WRDS_CHAIN_NR	2
 
-enum sar_wrds_sbs {
-	SAR_WRDS_CH1_14,	/* 2.4G */
-	SAR_WRDS_CH36_64,	/* 5.15~5.35G */
-	SAR_WRDS_UND1,		/* 5.35~5.47G */
-	SAR_WRDS_CH100_144,	/* 5.47~5.725G */
-	SAR_WRDS_CH149_165,	/* 5.725~5.95G */
-	SAR_WRDS_SB_NUM,
+enum sar_limit_index {
+	LMT_CH1_14,
+	LMT_CH36_64,
+	LMT_UND1,
+	LMT_CH100_144,
+	LMT_CH149_165,
+
+	LMT_TOTAL_NR,
+};
+
+struct sar_limits {
+	s8 limit[LMT_TOTAL_NR];
 };
 
 struct sar_wrds {
-	u8 val[SAR_WRDS_CHAIN_NUM][SAR_WRDS_SB_NUM]; /* Q3 */
+	struct sar_limits chain[SAR_WRDS_CHAIN_NR];
 };
 
-#define ACPI_WRDS_METHOD        "WRDS"
-#define ACPI_WRDS_WIFI          0x07
-#define ACPI_WRDS_TABLE_SIZE    (SAR_WRDS_CHAIN_NUM * SAR_WRDS_SB_NUM)
+#define ACPI_WRDS_METHOD	"WRDS"
+#define ACPI_WRDS_SIZE		sizeof(struct sar_wrds)
+#define ACPI_WRDS_TOTAL_SIZE	(sizeof(struct sar_wrds) + 2)
+#define ACPI_WIFI_DOMAIN	0x07
 
 #ifdef CONFIG_ACPI
-static bool rtw_sar_get_wrds(struct rtw_dev *rtwdev, union acpi_object *wrds,
-			     struct sar_wrds *sar_wrds)
-{
-	union acpi_object *data_pkg;
-	u32 i;
-	int path, sb, idx;
-
-	if (wrds->type != ACPI_TYPE_PACKAGE ||
-	    wrds->package.count < 2 ||
-	    wrds->package.elements[0].type != ACPI_TYPE_INTEGER ||
-	    wrds->package.elements[0].integer.value != 0) {
-		rtw_warn(rtwdev, "SAR: Unsupported wrds structure\n");
-		return false;
-	}
-
-	/* loop through all the packages to find the one for WiFi */
-	for (i = 1; i < wrds->package.count; i++) {
-		union acpi_object *domain;
-
-		data_pkg = &wrds->package.elements[i];
-
-		/* Skip anything that is not a package with the right
-		 * amount of elements (i.e. domain_type,
-		 * enabled/disabled plus the sar table size.
-		 */
-		if (data_pkg->type != ACPI_TYPE_PACKAGE ||
-		    data_pkg->package.count != ACPI_WRDS_TABLE_SIZE + 2)
-			continue;
-
-		domain = &data_pkg->package.elements[0];
-		if (domain->type == ACPI_TYPE_INTEGER &&
-		    domain->integer.value == ACPI_WRDS_WIFI)
-			break;
-
-		data_pkg = NULL;
-	}
-
-	if (!data_pkg)
-		return false;
-
-	if (data_pkg->package.elements[1].type != ACPI_TYPE_INTEGER)
-		return false;
-
-	/* WiFiSarEnable 0: ignore BIOS config; 1: use BIOS config */
-	if (data_pkg->package.elements[1].integer.value == 0)
-		return false;
-
-	/* read elements[2~11] */
-	idx = 2;
-	for (path = 0; path < SAR_WRDS_CHAIN_NUM; path++)
-		for (sb = 0; sb < SAR_WRDS_SB_NUM; sb++) {
-			union acpi_object *entry;
-
-			entry = &data_pkg->package.elements[idx++];
-			if (entry->type != ACPI_TYPE_INTEGER ||
-			    entry->integer.value > U8_MAX)
-				return false;
-
-			sar_wrds->val[path][sb] = entry->integer.value;
-		}
-
-	return true;
-}
-
-static bool rtw_sar_load_wrds_from_acpi(struct rtw_dev *rtwdev,
-					struct sar_wrds *sar_wrds)
+static union acpi_object *rtw_sar_get_acpiobj(struct rtw_dev *rtwdev,
+					      const char *method)
 {
 	struct device *dev = rtwdev->dev;
 	acpi_handle root_handle;
 	acpi_handle handle;
 	acpi_status status;
-	struct acpi_buffer wrds = {ACPI_ALLOCATE_BUFFER, NULL};
-	s32 ret;
+	struct acpi_buffer buf = {ACPI_ALLOCATE_BUFFER, NULL};
 
 	/* Check device handler */
 	root_handle = ACPI_HANDLE(dev);
 	if (!root_handle) {
-		rtw_warn(rtwdev, "SAR: Could not retireve root port ACPI handle\n");
-		return false;
+		rtw_dbg(rtwdev, RTW_DBG_REGD,
+			"SAR: Could not retireve root port ACPI handle\n");
+		return NULL;
 	}
 
 	/* Get method's handler */
-	status = acpi_get_handle(root_handle, (acpi_string)ACPI_WRDS_METHOD,
-				 &handle);
+	status = acpi_get_handle(root_handle, (acpi_string)method, &handle);
 	if (ACPI_FAILURE(status)) {
-		rtw_dbg(rtwdev, RTW_DBG_REGD, "SAR: WRDS method not found\n");
-		return false;
+		rtw_dbg(rtwdev, RTW_DBG_REGD, "SAR: %s method not found\n",
+			method);
+		return NULL;
 	}
 
-	/* Call WRDS with no argument */
-	status = acpi_evaluate_object(handle, NULL, NULL, &wrds);
+	/* Call specific method with no argument */
+	status = acpi_evaluate_object(handle, NULL, NULL, &buf);
 	if (ACPI_FAILURE(status)) {
 		rtw_dbg(rtwdev, RTW_DBG_REGD,
-			"SAR: WRDS invocation failed (0x%x)\n", status);
-		return false;
+			"SAR: %s invocation failed (0x%x)\n", method, status);
+		return NULL;
 	}
 
-	/* Process WRDS returned wrapper */
-	ret = rtw_sar_get_wrds(rtwdev, wrds.pointer, sar_wrds);
-	kfree(wrds.pointer);
-
-	return true;
+	return buf.pointer;
 }
 
-static bool rtw_sar_load_wrds_table(struct rtw_dev *rtwdev)
+static
+union acpi_object *rtw_sar_get_wifi_pkt(struct rtw_dev *rtwdev,
+					union acpi_object *obj,
+					u32 element_count)
 {
-	struct sar_wrds sar_wrds;
-	bool ret;
-	int path;
+	union acpi_object *wifi_pkg;
+	u32 i;
 
-	ret = rtw_sar_load_wrds_from_acpi(rtwdev, &sar_wrds);
-	if (!ret)
+	if (obj->type != ACPI_TYPE_PACKAGE ||
+	    obj->package.count < 2 ||
+	    obj->package.elements[0].type != ACPI_TYPE_INTEGER ||
+	    obj->package.elements[0].integer.value != 0) {
+		rtw_dbg(rtwdev, RTW_DBG_REGD,
+			"SAR: Unsupported wifi package structure\n");
+		return NULL;
+	}
+
+	/* loop through all the packages to find the one for WiFi */
+	for (i = 1; i < obj->package.count; i++) {
+		union acpi_object *domain;
+
+		wifi_pkg = &obj->package.elements[i];
+
+		/* Skip anything that is not a package with the right
+		 * amount of elements (i.e. domain_type,
+		 * enabled/disabled plus the sar table size.
+		 */
+		if (wifi_pkg->type != ACPI_TYPE_PACKAGE ||
+		    wifi_pkg->package.count != element_count)
+			continue;
+
+		domain = &wifi_pkg->package.elements[0];
+		if (domain->type == ACPI_TYPE_INTEGER &&
+		    domain->integer.value == ACPI_WIFI_DOMAIN)
+			return wifi_pkg;
+	}
+
+	return NULL;
+}
+
+static void *rtw_sar_get_wrds_table(struct rtw_dev *rtwdev)
+{
+	union acpi_object *wrds, *wrds_pkg;
+	int i, idx = 2;
+	u8 *wrds_raw = NULL;
+
+	wrds = rtw_sar_get_acpiobj(rtwdev, ACPI_WRDS_METHOD);
+	if (!wrds)
 		return false;
 
-	for (path = 0; path < SAR_WRDS_CHAIN_NUM; path++) {
-		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 1, 14,
-					 sar_wrds.val[path][SAR_WRDS_CH1_14]);
-		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 36, 64,
-					 sar_wrds.val[path][SAR_WRDS_CH36_64]);
-		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 100, 144,
-					 sar_wrds.val[path][SAR_WRDS_CH100_144]);
-		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 149, 165,
-					 sar_wrds.val[path][SAR_WRDS_CH149_165]);
+	wrds_pkg = rtw_sar_get_wifi_pkt(rtwdev, wrds, ACPI_WRDS_TOTAL_SIZE);
+	if (!wrds_pkg)
+		goto out;
+
+	/* WiFiSarEnable 0: ignore BIOS config; 1: use BIOS config */
+	if (wrds_pkg->package.elements[1].type != ACPI_TYPE_INTEGER ||
+	    wrds_pkg->package.elements[1].integer.value == 0)
+		goto out;
+
+	wrds_raw = kmalloc(ACPI_WRDS_SIZE, GFP_KERNEL);
+	if (!wrds_raw)
+		goto out;
+
+	/* read elements[2~11] */
+	for (i = 0; i < ACPI_WRDS_SIZE; i++) {
+		union acpi_object *entry;
+
+		entry = &wrds_pkg->package.elements[idx++];
+		if (entry->type != ACPI_TYPE_INTEGER ||
+		    entry->integer.value > U8_MAX) {
+			kfree(wrds_raw);
+			wrds_raw = NULL;
+			goto out;
+		}
+
+		wrds_raw[i] = entry->integer.value;
 	}
+out:
+	kfree(wrds);
+
+	return wrds_raw;
+}
+
+static void rtw_sar_apply_wrds(struct rtw_dev *rtwdev,
+			       const struct sar_wrds *wrds)
+{
+	int path;
+
+	for (path = 0; path < SAR_WRDS_CHAIN_NR; path++) {
+		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 1, 14,
+					 wrds->chain[path].limit[LMT_CH1_14]);
+		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 36, 64,
+					 wrds->chain[path].limit[LMT_CH36_64]);
+		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 100, 144,
+					 wrds->chain[path].limit[LMT_CH100_144]);
+		rtw_phy_set_tx_power_sar(rtwdev, RTW_REGD_WW, path, 149, 165,
+					 wrds->chain[path].limit[LMT_CH149_165]);
+	}
+}
+
+static bool rtw_sar_load_static_tables(struct rtw_dev *rtwdev)
+{
+	struct sar_wrds *wrds;
+
+	wrds = rtw_sar_get_wrds_table(rtwdev);
+	if (!wrds)
+		return false;
+
+	rtw_dbg(rtwdev, RTW_DBG_REGD,
+		"SAR: Apply WRDS to TX power\n");
+
+	rtw_sar_apply_wrds(rtwdev, wrds);
+	kfree(wrds);
 
 	return true;
 }
 #else
-static bool rtw_sar_load_wrds_table(struct rtw_dev *rtwdev)
+static bool rtw_sar_load_static_tables(struct rtw_dev *rtwdev)
 {
 	return false;
 }
@@ -164,5 +195,5 @@ static bool rtw_sar_load_wrds_table(struct rtw_dev *rtwdev)
 
 bool rtw_sar_load_table(struct rtw_dev *rtwdev)
 {
-	return rtw_sar_load_wrds_table(rtwdev);
+	return rtw_sar_load_static_tables(rtwdev);
 }

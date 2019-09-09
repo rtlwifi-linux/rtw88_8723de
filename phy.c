@@ -1359,6 +1359,8 @@ void __rtw_phy_set_tx_power_sar(struct rtw_dev *rtwdev, u8 regd, u8 rfpath,
 		base = hal->tx_pwr_by_rate_base_2g[rfpath][rs];
 		s = sar - base;
 		hal->tx_pwr_sar_2g[regd][rfpath][rs][ch_idx] = s;
+		if (regd == RTW_REGD_WW)
+			return;
 		ww_sar = hal->tx_pwr_sar_2g[RTW_REGD_WW][rfpath][rs][ch_idx];
 		ww_sar = min(ww_sar, s);
 		hal->tx_pwr_sar_2g[RTW_REGD_WW][rfpath][rs][ch_idx] = ww_sar;
@@ -1366,6 +1368,8 @@ void __rtw_phy_set_tx_power_sar(struct rtw_dev *rtwdev, u8 regd, u8 rfpath,
 		base = hal->tx_pwr_by_rate_base_5g[rfpath][rs];
 		s = sar - base;
 		hal->tx_pwr_sar_5g[regd][rfpath][rs][ch_idx] = s;
+		if (regd == RTW_REGD_WW)
+			return;
 		ww_sar = hal->tx_pwr_sar_5g[RTW_REGD_WW][rfpath][rs][ch_idx];
 		ww_sar = min(ww_sar, s);
 		hal->tx_pwr_sar_5g[RTW_REGD_WW][rfpath][rs][ch_idx] = ww_sar;

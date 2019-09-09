@@ -1398,11 +1398,8 @@ void _rtw_phy_set_tx_power_sar(struct rtw_dev *rtwdev, u8 regd, u8 rfpath,
 void rtw_phy_set_tx_power_sar(struct rtw_dev *rtwdev, u8 regd, u8 rfpath,
 			      u8 ch_start, u8 ch_end, u8 sar_q3)
 {
-	struct rtw_hal *hal = &rtwdev->hal;
 	u8 band_start, band_end;
 	int chidx_start, chidx_end;
-
-	hal->tx_pwr_sar_ww = (regd == RTW_REGD_WW ? true : false);
 
 	band_start = ch_start <= 14 ? PHY_BAND_2G : PHY_BAND_5G;
 	band_end = ch_end <= 14 ? PHY_BAND_2G : PHY_BAND_5G;
@@ -1884,8 +1881,8 @@ static s8 rtw_phy_get_tx_power_limit(struct rtw_dev *rtwdev, u8 band,
 		*sar = hal->tx_pwr_sar_5g[regd][rf_path][rs][ch_idx];
 		sar_ww = hal->tx_pwr_sar_5g[RTW_REGD_WW][rf_path][rs][ch_idx];
 	}
-	if (hal->tx_pwr_sar_ww)
-		*sar = min(*sar, sar_ww);
+	if (*sar >= rtwdev->chip->max_power_index)
+		*sar = sar_ww;
 
 	return power_limit;
 

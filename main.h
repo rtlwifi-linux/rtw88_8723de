@@ -1611,7 +1611,6 @@ struct rtw_hal {
 			[RTW_MAX_CHANNEL_NUM_2G];
 	s8 tx_pwr_sar_5g[RTW_REGD_MAX][RTW_RF_PATH_MAX][RTW_RATE_SECTION_MAX]
 			[RTW_MAX_CHANNEL_NUM_5G];
-	bool tx_pwr_sar_ww;
 	s8 tx_pwr_tbl[RTW_RF_PATH_MAX]
 		     [DESC_RATE_MAX];
 };

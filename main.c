@@ -1418,6 +1418,10 @@ void rtw_core_deinit(struct rtw_dev *rtwdev)
 		kfree(rsvd_pkt);
 	}
 
+	kfree(rtwdev->sar_rwrd);
+	kfree(rtwdev->sar_rwsi);
+	kfree(rtwdev->sar_rwgs);
+
 	mutex_destroy(&rtwdev->mutex);
 	mutex_destroy(&rtwdev->coex.mutex);
 	mutex_destroy(&rtwdev->hal.tx_power_mutex);

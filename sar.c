@@ -186,8 +186,296 @@ static bool rtw_sar_load_static_tables(struct rtw_dev *rtwdev)
 
 	return true;
 }
+
+#define ACPI_RWRD_METHOD	"RWRD"
+#define ACPI_RWSI_METHOD	"RWSI"
+#define ACPI_RWGS_METHOD	"RWGS"
+
+#define SAR_RWRD_ID_HP		0x5048
+#define SAR_RWRD_ID_RT		0x5452
+
+#define SAR_RWRD_CHAIN_NR	4
+
+struct sar_rwrd {
+	u16 id;
+	u8 en;
+	u8 count;
+	struct {
+		struct sar_limits chain[SAR_RWRD_CHAIN_NR];
+	} mode[0];
+} __packed;
+
+struct sar_rwsi_hp {
+	u8 index[SAR_RWRD_CHAIN_NR];
+};
+
+struct sar_rwsi_rt {
+	u8 index;
+};
+
+union sar_rwsi {
+	struct sar_rwsi_hp hp;
+	struct sar_rwsi_rt rt;
+};
+
+enum sar_rwgs_band {
+	SAR_RWGS_2G,
+	SAR_RWGS_5G,
+	SAR_RWGS_BAND_NR,
+};
+
+enum sar_rwgs_geo_hp {
+	SAR_RWGS_HP_FCC_IC,
+	SAR_RWGS_HP_ETSI_MKK,
+	SAR_RWGS_HP_WW_KCC,
+
+	SAR_RWGS_HP_NR,
+};
+
+struct sar_rwgs_hp {
+	struct {
+		struct {
+			s8 max;		/* Q1 + 10 */
+			s8 delta[4];	/* Q1 */
+		} band[SAR_RWGS_BAND_NR];
+	} geo[SAR_RWGS_HP_NR];
+} __packed;
+
+enum sar_rwgs_geo_rt {
+	SAR_RWGS_RT_FCC,
+	SAR_RWGS_RT_CE,
+	SAR_RWGS_RT_MKK,
+	SAR_RWGS_RT_IC,
+	SAR_RWGS_RT_KCC,
+	SAR_RWGS_RT_WW,
+
+	SAR_RWGS_RT_NR,
+};
+
+struct sar_rwgs_rt {
+	struct {
+		struct {
+			u8 max;		/* Q3 */
+			s8 delta;	/* Q1 */
+		} band[SAR_RWGS_BAND_NR];
+	} geo[SAR_RWGS_RT_NR];
+} __packed;
+
+union sar_rwgs {
+	struct sar_rwgs_hp hp;
+	struct sar_rwgs_rt rt;
+};
+
+struct sar_read {
+	int rwsi_sz;
+	int rwgs_sz;
+};
+
+static const struct sar_read sar_read_hp = {
+	.rwsi_sz = sizeof(struct sar_rwsi_hp),
+	.rwgs_sz = sizeof(struct sar_rwgs_hp),
+};
+
+static const struct sar_read sar_read_rt = {
+	.rwsi_sz = sizeof(struct sar_rwsi_rt),
+	.rwgs_sz = sizeof(struct sar_rwgs_rt),
+};
+
+static u8 *rtw_sar_get_raw_package(struct rtw_dev *rtwdev,
+				   union acpi_object *obj, int *len)
+{
+	u8 *raw;
+	u32 i;
+
+	if (obj->type != ACPI_TYPE_PACKAGE || obj->package.count <= 0) {
+		rtw_dbg(rtwdev, RTW_DBG_REGD,
+			"SAR: Unsupported obj to dump\n");
+		return NULL;
+	}
+
+	raw = kmalloc(obj->package.count, GFP_KERNEL);
+	if (!raw)
+		return NULL;
+
+	for (i = 0; i < obj->package.count; i++) {
+		union acpi_object *element;
+
+		element = &obj->package.elements[i];
+
+		if (element->type != ACPI_TYPE_INTEGER) {
+			rtw_dbg(rtwdev, RTW_DBG_REGD,
+				"SAR: Unexpected element type\n");
+			kfree(raw);
+			return NULL;
+		}
+
+		raw[i] = (u8)element->integer.value;
+	}
+
+	*len = obj->package.count;
+
+	return raw;
+}
+
+static void *rtw_sar_get_raw_table(struct rtw_dev *rtwdev, const char *method,
+				   int *len)
+{
+	union acpi_object *obj;
+	u8 *raw;
+
+	obj = rtw_sar_get_acpiobj(rtwdev, method);
+	if (!obj)
+		return NULL;
+
+	raw = rtw_sar_get_raw_package(rtwdev, obj, len);
+	kfree(obj);
+
+	return raw;
+}
+
+static bool valid_rwrd(struct rtw_dev *rtwdev, const struct sar_rwrd *rwrd,
+		       int len)
+{
+	if (len < sizeof(*rwrd)) {
+		rtw_dbg(rtwdev, RTW_DBG_REGD,
+			"SAR: RWRD: len %d is too short\n", len);
+		return false;
+	}
+
+	switch (rwrd->id) {
+	case SAR_RWRD_ID_HP:
+		rtwdev->sar_read = &sar_read_hp;
+		break;
+	case SAR_RWRD_ID_RT:
+		rtwdev->sar_read = &sar_read_rt;
+		break;
+	default:
+		rtw_dbg(rtwdev, RTW_DBG_REGD,
+			"SAR: RWRD: ID %04x isn't supported\n", rwrd->id);
+		return false;
+	}
+
+	if (sizeof(*rwrd) + rwrd->count * sizeof(rwrd->mode[0]) != len) {
+		rtw_dbg(rtwdev, RTW_DBG_REGD,
+			"SAR: RWRD: len(%d) doesn't match count(%d)\n",
+			len, rwrd->count);
+		return false;
+	}
+
+	return true;
+}
+
+static bool valid_rwsi_idx(struct rtw_dev *rtwdev, const struct sar_rwrd *rwrd,
+			   const u8 index[], int len)
+{
+	/* index range is one based. i.e. 1 <= index[] <= rwrd->count */
+	int i;
+
+	for (i = 0; i < len; i++)
+		if (index[i] < 1 || index[i] > rwrd->count) {
+			rtw_dbg(rtwdev, RTW_DBG_REGD,
+				"SAR: RWSI: index is out of range\n");
+			return false;
+		}
+
+	return true;
+}
+
+static bool valid_rwsi(struct rtw_dev *rtwdev, const struct sar_rwrd *rwrd,
+		       const union sar_rwsi *rwsi, int len)
+{
+	const struct sar_read *r = rtwdev->sar_read;
+
+	if (r->rwsi_sz != len)
+		goto err;
+
+	if (rwrd->id == SAR_RWRD_ID_HP &&
+	    valid_rwsi_idx(rtwdev, rwrd, rwsi->hp.index, SAR_RWRD_CHAIN_NR))
+		return true;
+
+	if (rwrd->id == SAR_RWRD_ID_RT &&
+	    valid_rwsi_idx(rtwdev, rwrd, &rwsi->rt.index, 1)) {
+		return true;
+	}
+
+err:
+	rtw_dbg(rtwdev, RTW_DBG_REGD,
+		"SAR: RWSI: len doesn't match struct size\n");
+
+	return false;
+}
+
+static bool valid_rwgs(struct rtw_dev *rtwdev, const struct sar_rwrd *rwrd,
+		       const union sar_rwgs *rwgs, int len)
+{
+	const struct sar_read *r = rtwdev->sar_read;
+
+	if (r->rwgs_sz == len)
+		return true;
+
+	rtw_dbg(rtwdev, RTW_DBG_REGD,
+		"SAR: RWGS: len doesn't match struct size\n");
+
+	return false;
+}
+
+static bool rtw_sar_load_dynamic_tables(struct rtw_dev *rtwdev)
+{
+	struct sar_rwrd *rwrd;
+	union sar_rwsi *rwsi;
+	union sar_rwgs *rwgs;
+	int len;
+	bool valid;
+
+	rwrd = rtw_sar_get_raw_table(rtwdev, ACPI_RWRD_METHOD, &len);
+	if (!rwrd)
+		goto out;
+	valid = valid_rwrd(rtwdev, rwrd, len);
+	if (!valid)
+		goto out_rwrd;
+	if (!rwrd->en) {
+		rtw_dbg(rtwdev, RTW_DBG_REGD, "SAR: RWRD isn't enabled\n");
+		goto out_rwrd;
+	}
+
+	rwsi = rtw_sar_get_raw_table(rtwdev, ACPI_RWSI_METHOD, &len);
+	if (!rwsi)
+		goto out_rwrd;
+	valid = valid_rwsi(rtwdev, rwrd, rwsi, len);
+	if (!valid)
+		goto out_rwsi;
+
+	rwgs = rtw_sar_get_raw_table(rtwdev, ACPI_RWGS_METHOD, &len);
+	if (!rwgs)
+		goto out_rwsi;
+	valid = valid_rwgs(rtwdev, rwrd, rwgs, len);
+	if (!valid)
+		goto out_rwgs;
+
+	rtwdev->sar_rwrd = rwrd;
+	rtwdev->sar_rwsi = rwsi;
+	rtwdev->sar_rwgs = rwgs;
+
+	rtw_dbg(rtwdev, RTW_DBG_REGD, "SAR: RWRD/RWSI/RWGS is adopted\n");
+
+	return true;
+
+out_rwgs:
+	kfree(rwgs);
+out_rwsi:
+	kfree(rwsi);
+out_rwrd:
+	kfree(rwrd);
+out:
+	return false;
+}
 #else
 static bool rtw_sar_load_static_tables(struct rtw_dev *rtwdev)
+{
+	return false;
+}
+
+static bool rtw_sar_load_dynamic_tables(struct rtw_dev *rtwdev)
 {
 	return false;
 }
@@ -195,5 +483,11 @@ static bool rtw_sar_load_static_tables(struct rtw_dev *rtwdev)
 
 bool rtw_sar_load_table(struct rtw_dev *rtwdev)
 {
+	bool ret;
+
+	ret = rtw_sar_load_dynamic_tables(rtwdev);
+	if (ret)
+		return ret;
+
 	return rtw_sar_load_static_tables(rtwdev);
 }

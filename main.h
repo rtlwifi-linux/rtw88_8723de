@@ -1615,6 +1615,11 @@ struct rtw_hal {
 		     [DESC_RATE_MAX];
 };
 
+struct sar_rwrd;
+union sar_rwsi;
+union sar_rwgs;
+struct sar_read;
+
 struct rtw_dev {
 	struct ieee80211_hw *hw;
 	struct device *dev;
@@ -1684,6 +1689,11 @@ struct rtw_dev {
 	u8 mp_mode;
 
 	struct rtw_wow_param wow;
+
+	struct sar_rwrd *sar_rwrd;
+	union  sar_rwsi *sar_rwsi;
+	union  sar_rwgs *sar_rwgs;
+	const struct sar_read *sar_read;
 
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));

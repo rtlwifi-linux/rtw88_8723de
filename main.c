@@ -881,6 +881,8 @@ int rtw_core_start(struct rtw_dev *rtwdev)
 
 	ieee80211_queue_delayed_work(rtwdev->hw, &rtwdev->watch_dog_work,
 				     RTW_WATCH_DOG_DELAY_TIME);
+	ieee80211_queue_delayed_work(rtwdev->hw, &rtwdev->sar_work,
+				     RTW_SAR_DELAY_TIME);
 
 	set_bit(RTW_FLAG_RUNNING, rtwdev->flags);
 
@@ -901,6 +903,7 @@ void rtw_core_stop(struct rtw_dev *rtwdev)
 	clear_bit(RTW_FLAG_FW_RUNNING, rtwdev->flags);
 
 	cancel_delayed_work_sync(&rtwdev->watch_dog_work);
+	cancel_delayed_work_sync(&rtwdev->sar_work);
 	cancel_delayed_work_sync(&coex->bt_relink_work);
 	cancel_delayed_work_sync(&coex->bt_reenable_work);
 	cancel_delayed_work_sync(&coex->defreeze_work);
@@ -1341,6 +1344,7 @@ int rtw_core_init(struct rtw_dev *rtwdev)
 
 	INIT_DELAYED_WORK(&rtwdev->watch_dog_work, rtw_watch_dog_work);
 	INIT_DELAYED_WORK(&rtwdev->lps_work, rtw_lps_work);
+	INIT_DELAYED_WORK(&rtwdev->sar_work, rtw_sar_work);
 	INIT_DELAYED_WORK(&coex->bt_relink_work, rtw_coex_bt_relink_work);
 	INIT_DELAYED_WORK(&coex->bt_reenable_work, rtw_coex_bt_reenable_work);
 	INIT_DELAYED_WORK(&coex->defreeze_work, rtw_coex_defreeze_work);

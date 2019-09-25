@@ -6,6 +6,7 @@
 #include "main.h"
 #include "debug.h"
 #include "phy.h"
+#include "sar.h"
 
 #define SAR_WRDS_CHAIN_NUM	2
 

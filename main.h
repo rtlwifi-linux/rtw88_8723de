@@ -1694,6 +1694,7 @@ struct rtw_dev {
 	union  sar_rwsi *sar_rwsi;
 	union  sar_rwgs *sar_rwgs;
 	const struct sar_read *sar_read;
+	struct delayed_work sar_work;
 
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));

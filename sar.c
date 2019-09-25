@@ -544,6 +544,42 @@ static void rtw_sar_apply_dynamic_tables(struct rtw_dev *rtwdev)
 	}
 }
 
+static bool rtw_sar_check_if_rwsi_changed(struct rtw_dev *rtwdev)
+{
+	union sar_rwsi *rwsi, *old;
+	bool valid;
+	int len;
+
+	if (!rtwdev->sar_rwrd || !rtwdev->sar_rwsi || !rtwdev->sar_rwgs)
+		return false;
+
+	rwsi = rtw_sar_get_raw_table(rtwdev, ACPI_RWSI_METHOD, &len);
+	if (!rwsi)
+		return false;
+	valid = valid_rwsi(rtwdev, rtwdev->sar_rwrd, rwsi, len);
+	if (!valid) {
+		kfree(rwsi);
+		return false;
+	}
+
+	if (memcmp(rwsi, rtwdev->sar_rwsi, len) == 0) {
+		kfree(rwsi);
+		return true;
+	}
+
+	old = rtwdev->sar_rwsi;
+	rtwdev->sar_rwsi = rwsi;
+	kfree(old);
+
+	rtw_dbg(rtwdev, RTW_DBG_REGD, "SAR: RWSI is changed\n");
+
+	rtw_sar_apply_dynamic_tables(rtwdev);
+
+	rtw_phy_set_tx_power_level(rtwdev, rtwdev->hal.current_channel);
+
+	return true;
+}
+
 static bool rtw_sar_load_dynamic_tables(struct rtw_dev *rtwdev)
 {
 	struct sar_rwrd *rwrd;
@@ -602,6 +638,11 @@ static bool rtw_sar_load_static_tables(struct rtw_dev *rtwdev)
 	return false;
 }
 
+static bool rtw_sar_check_if_rwsi_changed(struct rtw_dev *rtwdev)
+{
+	return false;
+}
+
 static bool rtw_sar_load_dynamic_tables(struct rtw_dev *rtwdev)
 {
 	return false;
@@ -617,4 +658,16 @@ bool rtw_sar_load_table(struct rtw_dev *rtwdev)
 		return ret;
 
 	return rtw_sar_load_static_tables(rtwdev);
+}
+
+void rtw_sar_work(struct work_struct *work)
+{
+	struct rtw_dev *rtwdev = container_of(work, struct rtw_dev,
+					      sar_work.work);
+
+	if (!rtw_sar_check_if_rwsi_changed(rtwdev))
+		return;
+
+	ieee80211_queue_delayed_work(rtwdev->hw, &rtwdev->sar_work,
+				     RTW_SAR_DELAY_TIME);
 }

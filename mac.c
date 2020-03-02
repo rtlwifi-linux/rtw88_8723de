@@ -934,6 +934,11 @@ static void __rtw_mac_flush_prio_queue(struct rtw_dev *rtwdev,
 				     rtw_read8(rtwdev, addr->rsvd);
 		avail_page = wsize ? rtw_read16(rtwdev, addr->avail) :
 				      rtw_read8(rtwdev, addr->avail);
+
+		printk("pk> 3B0h=0x%x\n", rtw_read32(rtwdev, 0x3B0));
+
+		printk("pk> prio_queue=%d rsvd_page=%d avail_page=%d\n",
+				prio_queue, rsvd_page, avail_page);
 		if (rsvd_page == avail_page)
 			return;
 
@@ -972,6 +977,8 @@ void rtw_mac_flush_queues(struct rtw_dev *rtwdev, u32 queues, bool drop)
 		prio_queues = BIT(RTW_DMA_MAPPING_MAX) - 1;
 	else
 		prio_queues = get_priority_queues(rtwdev, queues);
+
+	printk("pk> queues=0x%x prio_queues=0x%x\n", queues, prio_queues);
 
 	rtw_mac_flush_prio_queues(rtwdev, prio_queues, drop);
 }

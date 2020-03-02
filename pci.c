@@ -718,6 +718,11 @@ static int rtw_pci_xmit(struct rtw_dev *rtwdev,
 	memset(pkt_desc, 0, tx_pkt_desc_sz);
 	pkt_info->qsel = rtw_pci_get_tx_qsel(skb, queue);
 	rtw_tx_fill_tx_desc(pkt_info, skb);
+	if (skb->data && skb->len > 0x30 && (skb->data[0x28] & 0xf) != 0x08) {
+		/* Dump TX data, if not data frame */
+		printk("pk> skb->data=%p, skb->len=0x%x\n", skb->data, skb->len);
+		print_hex_dump_bytes("", DUMP_PREFIX_OFFSET, skb->data, skb->len);
+	}
 	dma = pci_map_single(rtwpci->pdev, skb->data, skb->len,
 			     PCI_DMA_TODEVICE);
 	if (pci_dma_mapping_error(rtwpci->pdev, dma))

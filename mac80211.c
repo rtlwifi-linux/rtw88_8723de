@@ -698,7 +698,7 @@ static void rtw_ops_flush(struct ieee80211_hw *hw,
 	rtw_leave_lps_deep(rtwdev);
 
 	/* a little sleep to make sure PCI-DMA is done */
-	msleep(20);
+	msleep(100);
 
 	rtw_mac_flush_queues(rtwdev, queues, drop);
 	mutex_unlock(&rtwdev->mutex);

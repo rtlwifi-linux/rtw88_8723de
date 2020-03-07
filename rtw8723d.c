@@ -1456,6 +1456,9 @@ static void rtw8723d_phy_calibration(struct rtw_dev *rtwdev)
 	u8 final_candidate = IQK_ROUND_INVALID;
 	bool good;
 
+	printk("Ignore IQK\n");
+	return;
+
 	rtw_dbg(rtwdev, RTW_DBG_RFK, "[IQK] Start!!!\n");
 
 	memset(result, 0, sizeof(result));

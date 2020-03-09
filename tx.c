@@ -503,6 +503,9 @@ static void rtw_txq_check_agg(struct rtw_dev *rtwdev,
 	struct ieee80211_tx_info *info;
 	struct rtw_sta_info *si;
 
+	printk("Ignore TX AGG\n");
+	return;
+
 	if (test_bit(RTW_TXQ_AMPDU, &rtwtxq->flags)) {
 		info = IEEE80211_SKB_CB(skb);
 		info->flags |= IEEE80211_TX_CTL_AMPDU;

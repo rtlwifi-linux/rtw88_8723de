@@ -77,7 +77,8 @@ static int rtw_ops_config(struct ieee80211_hw *hw, u32 changed)
 
 	if ((changed & IEEE80211_CONF_CHANGE_IDLE) &&
 	    !(hw->conf.flags & IEEE80211_CONF_IDLE)) {
-		ret = rtw_leave_ips(rtwdev);
+		printk("Ignore leave IPS\n");
+		//ret = rtw_leave_ips(rtwdev);
 		if (ret) {
 			rtw_err(rtwdev, "failed to leave idle state\n");
 			goto out;
@@ -98,7 +99,8 @@ static int rtw_ops_config(struct ieee80211_hw *hw, u32 changed)
 
 	if ((changed & IEEE80211_CONF_CHANGE_IDLE) &&
 	    (hw->conf.flags & IEEE80211_CONF_IDLE))
-		rtw_enter_ips(rtwdev);
+		printk("Ignore enter IPS\n");
+		//rtw_enter_ips(rtwdev);
 
 out:
 	mutex_unlock(&rtwdev->mutex);

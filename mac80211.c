@@ -497,6 +497,9 @@ static int rtw_ops_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	u8 hw_key_idx;
 	int ret = 0;
 
+	printk("pk> use swenc\n");
+	return -ENOSPC;	/*User disabled HW-crypto */
+
 	switch (key->cipher) {
 	case WLAN_CIPHER_SUITE_WEP40:
 		hw_key_type = RTW_CAM_WEP40;

@@ -503,9 +503,25 @@ void rtw_tx(struct rtw_dev *rtwdev,
 	    struct ieee80211_tx_control *control,
 	    struct sk_buff *skb)
 {
+	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 	struct rtw_tx_pkt_info pkt_info = {0};
 
 	rtw_tx_pkt_info_update(rtwdev, &pkt_info, control, skb);
+
+	if (ieee80211_is_deauth(hdr->frame_control)) {
+		int i;
+		struct sk_buff *skb2;
+
+		for (i = 0; i < 5; i++) {
+			skb2 = skb_copy(skb, GFP_ATOMIC);
+			if (!skb2)
+				continue;
+
+			if (rtw_hci_tx(rtwdev, &pkt_info, skb2))
+				ieee80211_free_txskb(rtwdev->hw, skb2);
+		}
+	}
+
 	if (rtw_hci_tx(rtwdev, &pkt_info, skb))
 		goto out;
 

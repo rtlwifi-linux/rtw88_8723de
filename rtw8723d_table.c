@@ -744,9 +744,10 @@ static const u32 rtw8723d_bb[] = {
 RTW_DECL_TABLE_PHY_COND(rtw8723d_bb, rtw_phy_cfg_bb);
 
 static const struct rtw_phy_pg_cfg_pair rtw8723d_bb_pg[] = {
-	{ 0, 0, 0, 0x00000e08, 0x0000ff00, 0x00003200, },
-	{ 0, 0, 0, 0x0000086c, 0xffffff00, 0x32323200, },
-	{ 0, 0, 0, 0x00000e00, 0xffffffff, 0x32343434, },
+	{ 0, 0, 0, 0x00000e08, 0x0000ff00, 0x00003600, },
+	{ 0, 0, 0, 0x0000086c, 0xffffff00, 0x32363600, },
+      //{ 0, 0, 0, 0x00000e00, 0xffffffff, 0x32343434, },
+	{ 0, 0, 0, 0x00000e00, 0xffffffff, 0x36383838, },
 	{ 0, 0, 0, 0x00000e04, 0xffffffff, 0x28303032, },
 	{ 0, 0, 0, 0x00000e10, 0xffffffff, 0x30323234, },
 	{ 0, 0, 0, 0x00000e14, 0xffffffff, 0x26282830, },

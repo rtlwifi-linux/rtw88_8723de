@@ -1936,7 +1936,8 @@ static void rtw_phy_get_tx_power_limit(struct rtw_dev *rtwdev, u8 band,
 		sar = sar_ww;
 
 	pwr_param->pwr_sar = sar;
-	pwr_param->pwr_limit = power_limit;
+	//pwr_param->pwr_limit = power_limit;
+	pwr_param->pwr_limit = (s8)rtwdev->chip->max_power_index;
 	return;
 
 err:

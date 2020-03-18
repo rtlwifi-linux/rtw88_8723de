@@ -60,6 +60,11 @@ void rtw_tx_fill_tx_desc(struct rtw_dev *rtwdev,
 	SET_TX_DESC_SPE_RPT(txdesc, pkt_info->report);
 	SET_TX_DESC_SW_DEFINE(txdesc, pkt_info->sn);
 	SET_TX_DESC_USE_RTS(txdesc, pkt_info->rts);
+
+	if (pkt_info->no_retry) {
+		SET_TX_DESC_RETRY_LIMIT_ENABLE(txdesc, 1);
+		SET_TX_DESC_DATA_RETRY_LIMIT(txdesc, 0);
+	}
 }
 EXPORT_SYMBOL(rtw_tx_fill_tx_desc);
 
@@ -341,6 +346,11 @@ void rtw_tx_pkt_info_update(struct rtw_dev *rtwdev,
 
 	bmc = is_broadcast_ether_addr(hdr->addr1) ||
 	      is_multicast_ether_addr(hdr->addr1);
+
+	if (info->flags & IEEE80211_TX_INTFL_MLME_CONN_TX) {
+		info->flags &= ~IEEE80211_TX_CTL_REQ_TX_STATUS;	// no report
+		pkt_info->no_retry = true;	// don't re-tx
+	}
 
 	if (info->flags & IEEE80211_TX_CTL_REQ_TX_STATUS)
 		rtw_tx_report_enable(rtwdev, pkt_info);

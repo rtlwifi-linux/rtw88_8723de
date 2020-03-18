@@ -554,6 +554,7 @@ struct rtw_tx_pkt_info {
 	bool short_gi;
 	bool report;
 	bool rts;
+	bool no_retry;
 };
 
 struct rtw_rx_pkt_stat {

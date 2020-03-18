@@ -288,12 +288,16 @@ static void rtw_ops_bss_info_changed(struct ieee80211_hw *hw,
 			rtw_coex_media_status_notify(rtwdev, conf->assoc);
 			if (rtw_bf_support)
 				rtw_bf_assoc(rtwdev, vif, conf);
+
+			rtwdev->fix_rate_count = 20;
 		} else {
 			rtw_leave_lps(rtwdev);
 			net_type = RTW_NET_NO_LINK;
 			rtwvif->aid = 0;
 			rtw_reset_rsvd_page(rtwdev);
 			rtw_bf_disassoc(rtwdev, vif, conf);
+
+			rtwdev->fix_rate_count = 0;
 		}
 
 		rtwvif->net_type = net_type;

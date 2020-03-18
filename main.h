@@ -1697,6 +1697,8 @@ struct rtw_dev {
 	const struct sar_read *sar_read;
 	struct delayed_work sar_work;
 
+	u32 fix_rate_count;
+
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));
 };

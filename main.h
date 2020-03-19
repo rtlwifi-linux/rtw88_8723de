@@ -1698,6 +1698,7 @@ struct rtw_dev {
 	struct delayed_work sar_work;
 
 	u32 fix_rate_count;
+	bool need_rfk;
 
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));
@@ -1733,6 +1734,11 @@ static inline void rtw_efuse_en(struct rtw_dev *rtwdev, bool enable)
 {
 	if (rtwdev->chip->ops->efuse_en)
 		rtwdev->chip->ops->efuse_en(rtwdev, enable);
+}
+
+static inline bool rtw_chip_wcpu_11n(struct rtw_dev *rtwdev)
+{
+	return rtwdev->chip->wlan_cpu == RTW_WCPU_11N;
 }
 
 void rtw_get_channel_params(struct cfg80211_chan_def *chandef,

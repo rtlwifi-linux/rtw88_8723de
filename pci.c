@@ -705,6 +705,7 @@ static int rtw_pci_xmit(struct rtw_dev *rtwdev,
 	u8 *pkt_desc;
 	struct rtw_pci_tx_buffer_desc *buf_desc;
 	u32 bd_idx;
+	bool show_txbd = false;
 
 	ring = &rtwpci->tx_rings[queue];
 
@@ -719,10 +720,25 @@ static int rtw_pci_xmit(struct rtw_dev *rtwdev,
 	memset(pkt_desc, 0, tx_pkt_desc_sz);
 	pkt_info->qsel = rtw_pci_get_tx_qsel(skb, queue);
 	rtw_tx_fill_tx_desc(pkt_info, skb);
-	if (skb->data && skb->len > 0x30 && (skb->data[0x28] & 0xf) != 0x08) {
+	if (skb->data && skb->len > 0x30) {
+		if ((skb->data[0x28] & 0xf) == 0x08) {
+			if (rtwdev->fix_rate_count == 0)
+				goto no_print;
+		}
+
 		/* Dump TX data, if not data frame */
 		printk("pk> skb->data=%p, skb->len=0x%x\n", skb->data, skb->len);
 		print_hex_dump_bytes("", DUMP_PREFIX_OFFSET, skb->data, skb->len);
+
+		show_txbd = true;
+		{
+			printk("1 0x3a0=%08x 0x3a4=%08x 0x3a8=%08x 0x3ac=%08x 0x3b0=%08x\n",
+				rtw_read32(rtwdev, 0x3a0), rtw_read32(rtwdev, 0x3a4),
+				rtw_read32(rtwdev, 0x3a8), rtw_read32(rtwdev, 0x3ac),
+				rtw_read32(rtwdev, 0x3b0));
+		}
+no_print:
+		;
 	}
 	dma = pci_map_single(rtwpci->pdev, skb->data, skb->len,
 			     PCI_DMA_TODEVICE);
@@ -765,6 +781,13 @@ static int rtw_pci_xmit(struct rtw_dev *rtwdev,
 		rtw_write8(rtwdev, RTK_PCI_TXBD_BCN_WORK, reg_bcn_work);
 	}
 	spin_unlock_bh(&rtwpci->irq_lock);
+
+		if (show_txbd) {
+			printk("2 0x3a0=%08x 0x3a4=%08x 0x3a8=%08x 0x3ac=%08x 0x3b0=%08x\n",
+				rtw_read32(rtwdev, 0x3a0), rtw_read32(rtwdev, 0x3a4),
+				rtw_read32(rtwdev, 0x3a8), rtw_read32(rtwdev, 0x3ac),
+				rtw_read32(rtwdev, 0x3b0));
+		}
 
 	return 0;
 }

@@ -523,6 +523,13 @@ void rtw_tx(struct rtw_dev *rtwdev,
 			if (rtw_hci_tx(rtwdev, &pkt_info, skb2))
 				ieee80211_free_txskb(rtwdev->hw, skb2);
 		}
+
+		{
+			printk("3 0x3a0=%08x 0x3a4=%08x 0x3a8=%08x 0x3ac=%08x 0x3b0=%08x\n",
+				rtw_read32(rtwdev, 0x3a0), rtw_read32(rtwdev, 0x3a4),
+				rtw_read32(rtwdev, 0x3a8), rtw_read32(rtwdev, 0x3ac),
+				rtw_read32(rtwdev, 0x3b0));
+		}
 	}
 
 	if (rtw_hci_tx(rtwdev, &pkt_info, skb))

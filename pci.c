@@ -640,7 +640,8 @@ static u8 rtw_hw_queue_mapping(struct sk_buff *skb)
 
 	if (unlikely(ieee80211_is_beacon(fc)))
 		queue = RTW_TX_QUEUE_BCN;
-	else if (unlikely(ieee80211_is_mgmt(fc) || ieee80211_is_ctl(fc)))
+	else if (unlikely(ieee80211_is_mgmt(fc) || ieee80211_is_ctl(fc) ||
+			  (skb->protocol == cpu_to_be16(ETH_P_PAE))))
 		queue = RTW_TX_QUEUE_MGMT;
 	else if (WARN_ON_ONCE(q_mapping >= ARRAY_SIZE(ac_to_hwq)))
 		queue = ac_to_hwq[IEEE80211_AC_BE];

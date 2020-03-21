@@ -499,6 +499,15 @@ rtw_tx_write_data_h2c_get(struct rtw_dev *rtwdev,
 }
 EXPORT_SYMBOL(rtw_tx_write_data_h2c_get);
 
+static void show_tx_counter(struct rtw_dev *rtwdev, const char *from)
+{
+	printk("%s\t0x3a0=0x%08x 0x3a4=0x%08x 0x3a8=0x%08x 0x3ac=0x%08x\n\t\t0x3b0=0x%08x 0x3b4=0x%08x\n\t\t0x9cc=0x%08x 0x9d0=0x%08x\n",
+		from,
+		rtw_read32(rtwdev, 0x3a0), rtw_read32(rtwdev, 0x3a4), rtw_read32(rtwdev, 0x3a8), rtw_read32(rtwdev, 0x3ac),
+		rtw_read32(rtwdev, 0x3b0), rtw_read32(rtwdev, 0x3b4),
+		rtw_read32(rtwdev, 0x9cc), rtw_read32(rtwdev, 0x9d0));
+}
+
 void rtw_tx(struct rtw_dev *rtwdev,
 	    struct ieee80211_tx_control *control,
 	    struct sk_buff *skb)
@@ -508,9 +517,15 @@ void rtw_tx(struct rtw_dev *rtwdev,
 
 	rtw_tx_pkt_info_update(rtwdev, &pkt_info, control, skb);
 
+	if (skb->protocol == cpu_to_be16(ETH_P_PAE)) {
+		show_tx_counter(rtwdev, "TX EAPoL");
+	}
+
 	if (ieee80211_is_deauth(hdr->frame_control)) {
 		int i;
 		struct sk_buff *skb2;
+
+		show_tx_counter(rtwdev, "TX deauth");
 
 		for (i = 0; i < 5; i++) {
 			skb2 = skb_copy(skb, GFP_ATOMIC);

@@ -888,6 +888,7 @@ static bool rtw_delay_eapol(struct rtw_dev *rtwdev, struct sk_buff *skb)
 		return false;
 
 	if (skb->len > 0x30 && skb->data[0x20] == 0x88 && skb->data[0x21] == 0x8e) {
+		printk("RX EAPoL\n");
 		if (rtwdev->rx_det.skb)
 			dev_kfree_skb(rtwdev->rx_det.skb);
 

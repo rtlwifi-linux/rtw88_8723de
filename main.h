@@ -1764,6 +1764,12 @@ struct rtw_dev {
 	u32 fix_rate_count;
 	bool need_rfk;
 
+	struct {
+		u32 count;
+		struct sk_buff *skb;
+		struct delayed_work work;
+	} rx_det;
+
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));
 };

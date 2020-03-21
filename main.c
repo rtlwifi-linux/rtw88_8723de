@@ -172,6 +172,18 @@ static void rtw_vif_watch_dog_iter(void *data, u8 *mac,
 	rtwvif->stats.rx_cnt = 0;
 }
 
+static void rtw_rx_det_work(struct work_struct *work)
+{
+	struct rtw_dev *rtwdev = container_of(work, struct rtw_dev,
+					      rx_det.work.work);
+
+	if (!rtwdev->rx_det.skb)
+		return;
+
+	ieee80211_rx_irqsafe(rtwdev->hw, rtwdev->rx_det.skb);
+	rtwdev->rx_det.skb = NULL;
+}
+
 /* process TX/RX statistics periodically for hardware,
  * the information helps hardware to enhance performance
  */
@@ -929,6 +941,7 @@ void rtw_core_stop(struct rtw_dev *rtwdev)
 
 	cancel_work_sync(&rtwdev->c2h_work);
 	cancel_delayed_work_sync(&rtwdev->watch_dog_work);
+	cancel_delayed_work_sync(&rtwdev->rx_det.work);
 	cancel_delayed_work_sync(&rtwdev->sar.work);
 	cancel_delayed_work_sync(&coex->bt_relink_work);
 	cancel_delayed_work_sync(&coex->bt_reenable_work);
@@ -1419,6 +1432,7 @@ int rtw_core_init(struct rtw_dev *rtwdev)
 		     (unsigned long)rtwdev);
 
 	INIT_DELAYED_WORK(&rtwdev->watch_dog_work, rtw_watch_dog_work);
+	INIT_DELAYED_WORK(&rtwdev->rx_det.work, rtw_rx_det_work);
 	INIT_DELAYED_WORK(&rtwdev->sar.work, rtw_sar_work);
 	INIT_DELAYED_WORK(&coex->bt_relink_work, rtw_coex_bt_relink_work);
 	INIT_DELAYED_WORK(&coex->bt_reenable_work, rtw_coex_bt_reenable_work);

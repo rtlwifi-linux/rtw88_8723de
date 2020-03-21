@@ -882,6 +882,27 @@ static void rtw_pci_tx_isr(struct rtw_dev *rtwdev, struct rtw_pci *rtwpci,
 	ring->r.rp = cur_rp;
 }
 
+static bool rtw_delay_eapol(struct rtw_dev *rtwdev, struct sk_buff *skb)
+{
+	if (rtwdev->rx_det.count == 0)
+		return false;
+
+	if (skb->len > 0x30 && skb->data[0x20] == 0x88 && skb->data[0x21] == 0x8e) {
+		if (rtwdev->rx_det.skb)
+			dev_kfree_skb(rtwdev->rx_det.skb);
+
+		rtwdev->rx_det.skb = skb;
+		ieee80211_queue_delayed_work(rtwdev->hw, &rtwdev->rx_det.work,
+					     HZ / 50);	/* 20 ms */
+		rtwdev->rx_det.count = 0;
+		return true;
+	}
+
+	rtwdev->rx_det.count--;
+
+	return false;
+}
+
 static void rtw_pci_rx_isr(struct rtw_dev *rtwdev, struct rtw_pci *rtwpci,
 			   u8 hw_queue)
 {
@@ -942,7 +963,8 @@ static void rtw_pci_rx_isr(struct rtw_dev *rtwdev, struct rtw_pci *rtwpci,
 
 			rtw_rx_stats(rtwdev, pkt_stat.vif, new);
 			memcpy(new->cb, &rx_status, sizeof(rx_status));
-			ieee80211_rx_irqsafe(rtwdev->hw, new);
+			if (!rtw_delay_eapol(rtwdev, new))
+				ieee80211_rx_irqsafe(rtwdev->hw, new);
 		}
 
 next_rp:

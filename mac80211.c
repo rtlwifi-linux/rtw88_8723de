@@ -358,6 +358,7 @@ static void rtw_ops_bss_info_changed(struct ieee80211_hw *hw,
 				rtw_bf_assoc(rtwdev, vif, conf);
 
 			rtwdev->fix_rate_count = 20;
+			rtwdev->rx_det.count = 5;
 		} else {
 			rtw_leave_lps(rtwdev);
 			net_type = RTW_NET_NO_LINK;
@@ -365,6 +366,7 @@ static void rtw_ops_bss_info_changed(struct ieee80211_hw *hw,
 			rtw_bf_disassoc(rtwdev, vif, conf);
 
 			rtwdev->fix_rate_count = 0;
+			rtwdev->rx_det.count = 0;
 		}
 
 		rtwvif->net_type = net_type;

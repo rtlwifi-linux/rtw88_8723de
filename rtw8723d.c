@@ -1456,6 +1456,7 @@ static void rtw8723d_phy_calibration(struct rtw_dev *rtwdev)
 	u8 final_candidate = IQK_ROUND_INVALID;
 	bool good;
 
+	printk("1 [IQK] Start!!!\n");
 	rtw_dbg(rtwdev, RTW_DBG_RFK, "[IQK] Start!!!\n");
 
 	memset(result, 0, sizeof(result));
@@ -1539,6 +1540,7 @@ out:
 		rtw_read32(rtwdev, REG_RXIQ_AB_S0));
 
 	rtw_dbg(rtwdev, RTW_DBG_RFK, "[IQK] finished\n");
+	printk("1 [IQK] finished\n");
 }
 
 /* for coex */

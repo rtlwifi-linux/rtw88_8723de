@@ -1760,6 +1760,8 @@ struct rtw_dev {
 
 	struct rtw_sar sar;
 
+	struct timer_list resume_timer;
+
 	/* hci related data, must be last */
 	u8 priv[0] __aligned(sizeof(void *));
 };

@@ -1164,6 +1164,7 @@ static void rtw_pci_clkreq_set(struct rtw_dev *rtwdev, bool enable)
 
 static void rtw_pci_aspm_set(struct rtw_dev *rtwdev, bool enable)
 {
+	struct rtw_pci *rtwpci = (struct rtw_pci *)rtwdev->priv;
 	u8 value;
 	int ret;
 
@@ -1173,7 +1174,7 @@ static void rtw_pci_aspm_set(struct rtw_dev *rtwdev, bool enable)
 		return;
 	}
 
-	if (enable)
+	if (enable && !rtwpci->forbidden_aspm)
 		value |= BIT_L1_SW_EN;
 	else
 		value &= ~BIT_L1_SW_EN;
@@ -1204,6 +1205,7 @@ static void rtw_pci_link_cfg(struct rtw_dev *rtwdev)
 	struct rtw_chip_info *chip = rtwdev->chip;
 	struct rtw_pci *rtwpci = (struct rtw_pci *)rtwdev->priv;
 	struct pci_dev *pdev = rtwpci->pdev;
+	struct pci_dev *bridge_pdev = pdev->bus->self;
 	u16 link_ctrl;
 	int ret;
 
@@ -1239,6 +1241,33 @@ static void rtw_pci_link_cfg(struct rtw_dev *rtwdev)
 		rtw_pci_clkreq_set(rtwdev, true);
 
 	rtwpci->link_ctrl = link_ctrl;
+
+	pcie_capability_read_word(bridge_pdev, PCI_EXP_LNKCTL, &rtwpci->bridge_link_ctrl);
+}
+
+static void rtw_pci_off_aspm_l1_cap(struct rtw_dev *rtwdev, bool off)
+{
+	struct rtw_pci *rtwpci = (struct rtw_pci *)rtwdev->priv;
+	struct pci_dev *pdev = rtwpci->pdev;
+	struct pci_dev *bridge_pdev = pdev->bus->self;
+	u16 link_ctrl = rtwpci->link_ctrl;
+	u16 bridge_link_ctrl = rtwpci->bridge_link_ctrl;
+
+	rtwpci->forbidden_aspm = off;
+
+	if (off) {
+		rtw_pci_aspm_set(rtwdev, false);
+		link_ctrl &= ~PCI_EXP_LNKCTL_ASPM_L1;
+		bridge_link_ctrl &= ~PCI_EXP_LNKCTL_ASPM_L1;
+	}
+
+	pcie_capability_write_word(pdev, PCI_EXP_LNKCTL, link_ctrl);
+	pcie_capability_write_word(bridge_pdev, PCI_EXP_LNKCTL, bridge_link_ctrl);
+}
+
+static void rtw_pci_resume_defer_notify(struct rtw_dev *rtwdev)
+{
+	rtw_pci_off_aspm_l1_cap(rtwdev, false);
 }
 
 static void rtw_pci_interface_cfg(struct rtw_dev *rtwdev)
@@ -1301,11 +1330,35 @@ static void rtw_pci_phy_cfg(struct rtw_dev *rtwdev)
 #ifdef CONFIG_PM
 static int rtw_pci_suspend(struct device *dev)
 {
+	struct ieee80211_hw *hw = dev_get_drvdata(dev);
+	struct rtw_dev *rtwdev;
+
+	if (!hw)
+		return 0;
+
+	rtwdev = hw->priv;
+
+	rtw_pci_off_aspm_l1_cap(rtwdev, true);
+
+	del_timer_sync(&rtwdev->resume_timer);
+
 	return 0;
 }
 
 static int rtw_pci_resume(struct device *dev)
 {
+	struct ieee80211_hw *hw = dev_get_drvdata(dev);
+	struct rtw_dev *rtwdev;
+
+	if (!hw)
+		return 0;
+
+	rtwdev = hw->priv;
+
+	rtw_pci_off_aspm_l1_cap(rtwdev, true);
+
+	mod_timer(&rtwdev->resume_timer, jiffies + HZ * 15);
+
 	return 0;
 }
 
@@ -1382,6 +1435,7 @@ static struct rtw_hci_ops rtw_pci_ops = {
 	.deep_ps = rtw_pci_deep_ps,
 	.link_ps = rtw_pci_link_ps,
 	.interface_cfg = rtw_pci_interface_cfg,
+	.resume_defer_notify = rtw_pci_resume_defer_notify,
 
 	.read8 = rtw_pci_read8,
 	.read16 = rtw_pci_read16,

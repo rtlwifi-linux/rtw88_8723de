@@ -209,6 +209,8 @@ struct rtw_pci {
 	struct rtw_pci_tx_ring tx_rings[RTK_MAX_TX_QUEUE_NUM];
 	struct rtw_pci_rx_ring rx_rings[RTK_MAX_RX_QUEUE_NUM];
 	u16 link_ctrl;
+	u16 bridge_link_ctrl;
+	bool forbidden_aspm;
 
 	void __iomem *mmap;
 };

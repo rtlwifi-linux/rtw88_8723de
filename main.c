@@ -1394,6 +1394,14 @@ static void rtw_stats_init(struct rtw_dev *rtwdev)
 		ewma_snr_init(&dm_info->ewma_snr[i]);
 }
 
+static void rtw_resume_timer(struct timer_list *t)
+{
+	struct rtw_dev *rtwdev = from_timer(rtwdev, t, resume_timer);
+
+	if (rtwdev->hci.ops->resume_defer_notify)
+		rtwdev->hci.ops->resume_defer_notify(rtwdev);
+}
+
 int rtw_core_init(struct rtw_dev *rtwdev)
 {
 	struct rtw_chip_info *chip = rtwdev->chip;
@@ -1405,6 +1413,7 @@ int rtw_core_init(struct rtw_dev *rtwdev)
 
 	timer_setup(&rtwdev->tx_report.purge_timer,
 		    rtw_tx_report_purge_timer, 0);
+	timer_setup(&rtwdev->resume_timer, rtw_resume_timer, 0);
 	tasklet_init(&rtwdev->tx_tasklet, rtw_tx_tasklet,
 		     (unsigned long)rtwdev);
 
@@ -1487,6 +1496,7 @@ void rtw_core_deinit(struct rtw_dev *rtwdev)
 	}
 
 	rtw_sar_release_table(rtwdev);
+	del_timer_sync(&rtwdev->resume_timer);
 
 	mutex_destroy(&rtwdev->mutex);
 	mutex_destroy(&rtwdev->coex.mutex);

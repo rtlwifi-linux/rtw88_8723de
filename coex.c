@@ -749,9 +749,15 @@ void rtw_coex_write_indirect_reg(struct rtw_dev *rtwdev, u16 addr,
 static void rtw_coex_coex_ctrl_owner(struct rtw_dev *rtwdev, bool wifi_control)
 {
 	if (wifi_control)
+	{
 		rtw_write32_set(rtwdev, REG_SYS_SDIO_CTRL, BIT_LTE_MUX_CTRL_PATH);
+		rtw_write8_mask(rtwdev, 0x67, 0x80, 0x1);
+	}
 	else
+	{
 		rtw_write32_clr(rtwdev, REG_SYS_SDIO_CTRL, BIT_LTE_MUX_CTRL_PATH);
+		rtw_write8_mask(rtwdev, 0x67, 0x80, 0x0);
+	}
 }
 
 static void rtw_coex_set_gnt_bt(struct rtw_dev *rtwdev, u8 state)
@@ -1343,11 +1349,14 @@ static void rtw_coex_action_bt_inquiry(struct rtw_dev *rtwdev)
 				tdma_case = 108;
 			else
 				tdma_case = 109;
+		} else if (coex_stat->wl_gl_busy) {
+			table_case = 114;
+			tdma_case = 121;
 		} else if (coex_stat->wl_connected) {
-			table_case = 101;
-			tdma_case = 110;
-		} else {
 			table_case = 100;
+			tdma_case = 100;
+		} else {
+			table_case = 101;
 			tdma_case = 100;
 		}
 	}

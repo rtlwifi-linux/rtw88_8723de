@@ -1355,10 +1355,10 @@ static void rtw_coex_action_bt_inquiry(struct rtw_dev *rtwdev)
 			table_case = 114;
 			tdma_case = 121;
 		} else if (coex_stat->wl_connected) {
-			table_case = 101;
-			tdma_case = 110;
-		} else {
 			table_case = 100;
+			tdma_case = 100;
+		} else {
+			table_case = 101;
 			tdma_case = 100;
 		}
 	}
